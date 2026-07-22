@@ -1,0 +1,82 @@
+{
+  "paths": {
+    "root_dir": "/DATA/Abul Hasan/Glioma Revision/data/combined",
+    "logs_dir": "logs"
+  },
+  "epoch": 50,
+  "learning_rate": 0.0001,
+  "weight_decay": 0.0001,
+  "patience": 50,
+  "grad_clip_norm": 1.0,
+  "val_interval": 1,
+  "val_amp": true,
+  "seed": 0,
+  "data": {
+    "val_frac": 0.15,
+    "test_frac": 0.1,
+    "cache_rate": 0.0,
+    "batch_size_train": 1,
+    "batch_size_val": 1,
+    "batch_size_test": 1,
+    "num_workers_train": 4,
+    "num_workers_val": 4,
+    "num_workers_test": 0
+  },
+  "crop": {
+    "train_start_slice": 40,
+    "val_start_slice": 40,
+    "threshold": 0.25
+  },
+  "unetr": {
+    "img_shape": [
+      128,
+      128,
+      96
+    ],
+    "input_dim": 4,
+    "output_dim": 3,
+    "patch_size": 16,
+    "embed_dim": 768,
+    "num_layers": 12,
+    "num_heads": 12,
+    "mlp_dim": 2048,
+    "extract_layers": [
+      3,
+      6,
+      9,
+      12
+    ],
+    "dropout": 0.2
+  },
+  "loss": {
+    "dice_weight": 0.5,
+    "focal_weight": 0.3,
+    "hausdorff_weight": 0.2,
+    "focal_gamma": 2.0,
+    "aux_z6_weight": 0.3,
+    "aux_z3_weight": 0.15
+  },
+  "metrics": {
+    "voxel_spacing": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "auc_every_n_epochs": 10
+  },
+  "attention": {
+    "enabled": true,
+    "every_n_epochs": 10,
+    "sample_idx": 0
+  },
+  "visualization": {
+    "sample_index": 27,
+    "extra_indices": [
+      0,
+      5,
+      10,
+      15,
+      20
+    ]
+  }
+}

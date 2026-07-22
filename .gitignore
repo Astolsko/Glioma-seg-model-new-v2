@@ -1,0 +1,15 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Model weights / checkpoints (also inside logs/)
+*.pth
+*.pt
+*.ckpt
+*.onnx
+*.h5
+*.safetensors
+
+# keep logs/ and results, but not the checkpoints they contain (matched above)
