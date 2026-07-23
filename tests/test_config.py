@@ -59,10 +59,17 @@ def test_crop_window_fits_within_known_raw_scan_depth():
 
 def test_loss_weights_are_nonnegative():
     assert cfg.loss.dice_weight >= 0
-    assert cfg.loss.focal_weight >= 0
+    assert cfg.loss.tversky_weight >= 0
     assert cfg.loss.hausdorff_weight >= 0
     assert cfg.loss.aux_z6_weight >= 0
     assert cfg.loss.aux_z3_weight >= 0
+
+
+def test_tversky_recall_weighting_and_anneal_are_sane():
+    # alpha (FN weight) must exceed beta (FP weight) for the recall focus
+    assert cfg.loss.tversky_alpha > cfg.loss.tversky_beta
+    assert cfg.loss.tversky_gamma > 0
+    assert 0 <= cfg.loss.hd_anneal_frac <= 1
 
 
 def test_data_fractions_leave_room_for_training_split():

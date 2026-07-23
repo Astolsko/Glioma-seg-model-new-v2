@@ -85,9 +85,12 @@ cfg.unetr.dropout = 0.2
 # ---------------------------------------------------------------------------
 cfg.loss = EasyDict()
 cfg.loss.dice_weight = 0.5
-cfg.loss.focal_weight = 0.3
-cfg.loss.hausdorff_weight = 0.2
-cfg.loss.focal_gamma = 2.0
+cfg.loss.tversky_weight = 0.3      # weight of the Focal-Tversky term (was focal_weight)
+cfg.loss.hausdorff_weight = 0.2    # target weight; annealed 0 -> this over training
+cfg.loss.tversky_alpha = 0.7       # FN weight; alpha > beta => recall-focused (helps ET/TC)
+cfg.loss.tversky_beta = 0.3        # FP weight
+cfg.loss.tversky_gamma = 4.0 / 3.0  # focal exponent is 1/gamma = 0.75 (Abraham & Khan)
+cfg.loss.hd_anneal_frac = 0.5      # HD weight reaches full at 50% of epochs, holds after
 cfg.loss.aux_z6_weight = 0.3
 cfg.loss.aux_z3_weight = 0.15
 

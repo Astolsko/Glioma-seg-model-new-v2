@@ -336,6 +336,10 @@ def run_training(model, loaders, loss_fn, device, cfg, run_logger):
     for epoch in range(cfg.epoch):
         epoch_start = time.time()
 
+        # anneal the Hausdorff term (loss_fn holds the schedule; no-op if absent)
+        if hasattr(loss_fn, "set_epoch"):
+            loss_fn.set_epoch(epoch, cfg.epoch)
+
         epoch_loss = train_one_epoch(
             model, train_loader, train_ds, optimizer, scaler, loss_fn, device, cfg, epoch,
             estimator=estimator, console=run_logger.console,
