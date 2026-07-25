@@ -76,3 +76,50 @@ def test_data_fractions_leave_room_for_training_split():
     assert 0 < cfg.data.val_frac < 1
     assert 0 < cfg.data.test_frac < 1
     assert cfg.data.val_frac + cfg.data.test_frac < 1
+
+
+def test_voxel_spacing_matches_the_resize_the_pipeline_actually_applies():
+    """HD95 is the only metric that reads voxel_spacing, and it reports mm.
+
+    Resized squeezes H/W from BraTS's 240 down to img_shape[0:2], so an
+    in-plane voxel is 240/128 = 1.875mm, not 1mm. Depth is exempt because
+    CropRawDepthd already hands Resized exactly img_shape[-1] slices, making
+    the depth resize a no-op. Hardcoding (1,1,1) here understated every
+    in-plane HD95 by 1.875x.
+    """
+    expected = (
+        cfg.metrics.raw_inplane_size / cfg.unetr.img_shape[0],
+        cfg.metrics.raw_inplane_size / cfg.unetr.img_shape[1],
+        1.0,
+    )
+    assert tuple(cfg.metrics.voxel_spacing) == pytest.approx(expected)
+    assert cfg.metrics.voxel_spacing[2] == 1.0, (
+        "depth must stay 1mm/voxel — if it doesn't, CropRawDepthd is no longer "
+        "handing Resized an exact-depth window and the resize is resampling slices"
+    )
+
+
+def test_inference_settings_have_one_entry_per_output_channel():
+    for name in ("thresholds", "min_component_voxels", "min_total_voxels"):
+        assert len(cfg.infer[name]) == cfg.unetr.output_dim, (
+            f"cfg.infer.{name} is indexed per channel (TC, WT, ET)"
+        )
+    assert all(0.0 < t < 1.0 for t in cfg.infer.thresholds)
+    assert 0.0 <= cfg.infer.sw_overlap < 1.0
+
+
+def test_warmup_fits_inside_the_training_schedule():
+    assert 0 <= cfg.warmup_epochs < cfg.epoch
+    assert 0 <= cfg.ema_decay < 1
+
+
+def test_xai_cam_layers_are_resolvable_paths():
+    # xai._resolve_layer walks these against the model; a typo here only
+    # surfaces once a checkpoint has been loaded and the run is underway.
+    assert cfg.xai.cam_layers
+    assert all(part.isdigit() or part.isidentifier()
+               for path in cfg.xai.cam_layers for part in path.split("."))
+    assert cfg.xai.cam_roi in ("gt", "pred", "all")
+    assert all(m in ("hires", "grad") for m in cfg.xai.cam_methods)
+    assert cfg.xai.mc_passes >= 2
+    assert cfg.xai.deletion_fractions[0] == 0.0, "curve needs an unperturbed anchor"

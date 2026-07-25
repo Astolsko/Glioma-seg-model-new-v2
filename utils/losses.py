@@ -62,11 +62,23 @@ def build_loss_fn(cfg):
 
 
 def combine_main_and_aux(loss_function, outputs, aux_z6, aux_z3, labels, cfg):
-    loss_main = loss_function(outputs, labels)
-    loss_aux6 = loss_function(aux_z6, labels)
-    loss_aux3 = loss_function(aux_z3, labels)
+    """Main head gets the full composite loss; the deep-supervision heads get
+    Dice only.
+
+    The aux heads exist to keep gradients flowing to the fine decoder scales,
+    which plain Dice already does. Running the full composite on them meant
+    three HausdorffDTLoss evaluations per step instead of one — and
+    HausdorffDT computes a Euclidean distance transform per channel per
+    sample, on CPU via scipy unless cuCIM is installed. That was a large
+    fraction of the ~2500s epoch, spent on a term whose own authors ramp it in
+    slowly on the MAIN output.
+
+    Falls back to calling `loss_function` itself when it has no `.dice`
+    attribute, so a plain callable still works (the tests rely on this).
+    """
+    aux_loss_fn = getattr(loss_function, "dice", loss_function)
     return (
-        loss_main
-        + cfg.loss.aux_z6_weight * loss_aux6
-        + cfg.loss.aux_z3_weight * loss_aux3
+        loss_function(outputs, labels)
+        + cfg.loss.aux_z6_weight * aux_loss_fn(aux_z6, labels)
+        + cfg.loss.aux_z3_weight * aux_loss_fn(aux_z3, labels)
     )

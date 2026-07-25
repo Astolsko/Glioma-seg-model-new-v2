@@ -50,6 +50,8 @@ class RunLogger:
         attention/            — attention-map overlays saved during validation
         checkpoints/          — best_metric_model.pth
         testing/              — final test-set metrics + qualitative outputs
+        eval/                 — threshold sweep + the inference recipe used
+        xai/                  — explainability figures and per-component JSON
     """
 
     def __init__(self, run_name=None, base_dir="logs"):
@@ -66,9 +68,12 @@ class RunLogger:
         self.checkpoint_dir = os.path.join(self.run_dir, "checkpoints")
         self.testing_dir = os.path.join(self.run_dir, "testing")
         self.testing_vis_dir = os.path.join(self.testing_dir, "visualizations")
+        self.eval_dir = os.path.join(self.run_dir, "eval")
+        self.xai_dir = os.path.join(self.run_dir, "xai")
 
         for d in (self.run_dir, self.plots_dir, self.vis_dir, self.attention_dir,
-                  self.checkpoint_dir, self.testing_dir, self.testing_vis_dir):
+                  self.checkpoint_dir, self.testing_dir, self.testing_vis_dir,
+                  self.eval_dir, self.xai_dir):
             os.makedirs(d, exist_ok=True)
 
         self.log_path = os.path.join(self.run_dir, "log.txt")

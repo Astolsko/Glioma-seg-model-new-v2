@@ -37,9 +37,78 @@ The model **also already contains** modules §5/§6 treated as future work: `Con
 1. ~~**[BUG] Focal loss double-sigmoids.**~~ **DONE (Session 2).** MONAI `FocalLoss` removed entirely; see #2.
 2. ~~**No recall weighting for ET/TC false-negatives.**~~ **DONE (Session 2).** Plain Focal **replaced** by Focal-Tversky (α=0.7, β=0.3, γ=4/3) in `utils/losses.py:CombinedLoss`; loss stays at 3 components (Dice + Focal-Tversky + HD).
 3. ~~**Hausdorff term is un-annealed.**~~ **DONE (Session 2).** Linear anneal 0→full over first `hd_anneal_frac`(=0.5) of epochs via `CombinedLoss.set_epoch()`, called in `run_training`.
-4. **No post-processing.** No connected-component / min-volume ET suppression at inference. Given 0.1, this is likely the biggest ET-HD95 win and is near-zero Dice risk if tuned on val. **← next up**
-5. **Plain `Adam`, no EMA.** `build_training_components` uses `torch.optim.Adam` (cosine schedule already present). Cheap upgrades: `AdamW` + model EMA (decay 0.999).
+4. ~~**No post-processing.**~~ **DONE (Session 3).** `utils/postprocess.py`: per-channel thresholds + connected-component suppression + a min-total floor that zeroes the ET channel outright (the 374.0 empty-mismatch fix). Applied at test/evaluate time, deliberately *not* in the per-epoch val loop — its thresholds are tuned on that same split, so folding it in would let post-processing hyperparameters pick the checkpoint.
+5. ~~**Plain `Adam`, no EMA.**~~ **DONE (Session 3).** AdamW + linear warmup → cosine (`SequentialLR`) + EMA via `torch.optim.swa_utils.AveragedModel` (stdlib, decay 0.999). Validation/checkpoint/test all use the EMA weights.
 6. **(Optional, later) large-kernel/boundary refinement block** — only if 1–5 plateau, and only as a *replacement* for ConvNeXt+CoordAtt at the top stage, benchmarked head-to-head.
+
+### 0.5 Findings from the Session-3 code read (these were NOT in the original report)
+
+Ordered by expected impact. All are pipeline defects rather than modelling choices, which is why none of them appear in §1–§14.
+
+| # | Finding | Status |
+|---|---|---|
+| A | **`Resized` passed `mode="nearest"` for BOTH keys** — every MRI was point-sampled 240→128 in-plane, a 1.875× downsample with no filtering. Aliasing on exactly the fine T1ce texture ET depends on. Prime suspect for the ET ceiling. | **FIXED** — `("trilinear","nearest")` + `anti_aliasing=(True,False)`, factored into `transforms.build_resize` |
+| B | **HD95 reported in the wrong units** — post-resize in-plane spacing is 240/128 = 1.875mm, `voxel_spacing` was `(1,1,1)`. Every in-plane HD95 understated 1.875×. | **FIXED** — derived in `config.py`. Only HD95 reads it; all counting metrics unchanged. HD95 goes **up**: that is the honest number |
+| C | **Train + eval both at 1.875mm** (BraTS scores at 1mm). Evaluating on a downsampled problem is non-standard and flatters small structures. | **DEFERRED** — Tier C1, user chose to keep the current protocol |
+| D | Fixed absolute depth window `[40:136)` for every patient, never verified dataset-wide. Any tumour outside is an unrecoverable FN. | OPEN — cheap to check with `tools/crop_visual_check.py` |
+| E | **Deep supervision ran the full composite loss on both aux heads** → 3× `HausdorffDTLoss` per step, i.e. 3 scipy CPU distance transforms. Large share of the 2500s epoch, for a term whose own authors ramp it in slowly on the *main* output. | **FIXED** — aux heads get Dice only |
+| F | Inference used MONAI defaults (overlap 0.25, constant blend), no TTA, fixed 0.5 threshold, no post-processing. | **FIXED** — overlap 0.5 + gaussian, 8-way flip TTA, tuned per-channel thresholds |
+| G | `compute_miou` averages background IoU (~0.99), so the reported mIoU mostly measures background. Misleading in a paper table. | OPEN — reporting choice, not a bug |
+| H | `RandRotate90(max_k=3)` on brain MRI; `GradScaler` is a no-op under bf16; Adam+`weight_decay` is coupled L2. | rot90 and Adam **FIXED**; GradScaler left (harmless) |
+
+### 0.6 Explainability (Session 3) — `utils/xai.py` + `xai.py`, all post-hoc
+
+The pipeline's existing attention figure averages the last ViT layer's weights over heads *and* over queries at 16³-voxel granularity — the exact construction the "attention is not explanation" literature targets. It is not defensible as a paper's XAI contribution. Replaced/augmented by:
+
+- **X1 Seg-Grad-CAM + HiResCAM** (Vinogradova AAAI 2020; Draelos & Carin), ROI-restricted, at four decoder depths.
+- **X2 Modality ablation** → 4×3 ΔDice table. The one result a radiologist can falsify: ET must collapse without T1ce, WT without FLAIR.
+- **X3 MC-dropout** → mean probability (a free self-ensemble), epistemic std, predictive entropy, plus an error-retention curve.
+- **X4 Attention rollout** (Abnar & Zuidema ACL 2020) — residual-corrected, chained across all 12 blocks.
+- **X5 Quantitative evaluation** — deletion curves **against a random-ordering null**, localisation (inside / peritumoral / elsewhere), and the Adebayo et al. (NeurIPS 2018) cascading-randomisation sanity check.
+
+X5 is the load-bearing part. X1–X4 alone are a heatmap gallery; X5 is what makes them falsifiable claims. If the randomisation test does not show SSIM decaying, the saliency method is an edge detector and every conclusion drawn from it is void.
+
+**Deliberately skipped:** LIME/SHAP on 3D volumes (thousands of forwards per case, and the superpixel decomposition needed to make it tractable destroys the boundary detail ET is about) and Captum IG (a new dependency for a family — gradient-based — already covered).
+
+### 0.7 DEFERRED BACKLOG — start here next session, once the new run + XAI results exist
+
+Nothing below is implemented. It is ordered so a future session can pick up without re-deriving anything.
+
+#### 0.7.1 Decision gates — read the new results in this order
+
+Answer these against `logs/<new-run>/` before writing any code. Each one changes what is worth doing next.
+
+| # | Look at | If | Then |
+|---|---|---|---|
+| G1 | `eval/threshold_sweep.json` | best ET threshold is far from 0.5 (< 0.4 or > 0.6) | the model is badly calibrated on ET — Focal-Tversky α is inflating FPs. Consider α 0.7 → 0.6, or per-channel α/β (0.7.2 #4) |
+| G2 | `testing/test_metrics.csv` ET HD95 | still > 10 mm after post-processing | the min-volume floor is too low. Sweep `min_total_voxels` on val (100 → 250 → 500) before touching the model |
+| G3 | ET Dice vs `v1-run3`'s 0.783 | improved < 0.01 | the trilinear-resampling fix was NOT the ET ceiling → the ceiling is resolution itself, go to 0.7.2 #1 (native 1 mm) |
+| G4 | `xai/faithful.json` sanity check | SSIM does not decay across the cascade | **stop and fix before publishing anything XAI** — the CAM is edge-detecting, not explaining, and every X1/X5 conclusion is void |
+| G5 | `xai/faithful.json` deletion AUC | CAM AUC ≈ random-null AUC | same problem, different symptom. The explanation carries no information |
+| G6 | `xai/modality.json` | ET does *not* collapse when T1ce is removed, or WT does not collapse without FLAIR | the model is right for the wrong reasons — a far more interesting (and publishable) finding than a good Dice, but it must be investigated, not buried |
+| G7 | `xai/uncertainty.json` retention curve | flat | MC-dropout uncertainty is uninformative here; drop the clinical-triage claim or switch to a deep ensemble for uncertainty |
+
+#### 0.7.2 Deferred performance work
+
+1. **Native 1 mm patch training (Tier C1)** — the largest remaining lever, and it removes findings A/B/C at once. Concretely: delete `transforms.build_resize`, replace with `RandCropByPosNegLabeld(spatial_size=(128,128,128), pos=2, neg=1, num_samples=2)` on the 1 mm volumes; keep `CropForegroundd` for val/test and let sliding-window handle full volumes; then `cfg.metrics.voxel_spacing` becomes `(1,1,1)` and is honest *by construction* rather than by correction. Expect reported numbers to DROP relative to the current resized-space figures — the current ones are measured on an easier, downsampled problem.
+2. **5-fold CV + deep ensemble (Tier C2)** — reviewers expect CV. Ensembling the folds is a free +0.01–0.02 on top. ~7 days GPU for the full five.
+3. **Depth-window audit (finding D)** — verify no tumour voxel in the dataset falls outside the fixed `[40:136)` window. `tools/crop_visual_check.py` already loads and dumps the crop; extend it to loop the whole dataset and assert instead of eyeballing one patient. Cheap, and it invalidates results if it fails.
+4. **Per-channel Tversky α/β** — currently uniform across TC/WT/ET (`ponytail:` marker already in `utils/losses.py`). Only worth it if G1 says ET calibration is off.
+5. **Large-kernel / boundary refinement block** (§6.1 BG-CLKA) — only if ET still lags after 1–3, and only as a *replacement* for the top-stage ConvNeXt+CoordAtt, benchmarked head-to-head. Do not stack.
+6. **Lesion-wise Dice/HD95** — BraTS 2023+ scores lesion-wise, which is stricter and not comparable to the region-wise numbers currently reported. If the paper claims a BraTS comparison, this is needed for the claim to be true.
+7. **Test split reports fewer metrics than val** — `run_test` computes only Dice/HD95/sens/IoU, while `validate()` also has specificity/F1/mIoU. The paper's headline table is the test one. ~5 lines to bring them level.
+8. **`compute_miou` averages background IoU** (~0.99), so the reported ~0.86 mostly measures background. Relabel it or drop it from the paper table — a reviewer who checks the formula will read it as inflated.
+9. **cuCIM** — `HausdorffDTLoss` falls back to scipy CPU distance transforms without it. Installing it would make the HD term cheap enough to put back on the aux heads if that ever looks worthwhile.
+10. **`GradScaler` is a no-op under bf16 autocast** — cosmetic, delete when next touching `engine.py`.
+
+#### 0.7.3 Deferred XAI work
+
+1. **Aggregate across the full test set.** `cfg.xai.sample_indices` is `[0,1,2]` — enough for figures, not for a table. A paper needs mean ± std of deletion AUC and localisation over all test patients. The functions already return per-sample dicts; this is a loop and an aggregation, not new science.
+2. **Explicit baseline row: rollout vs raw last-layer attention.** The old `utils/attention.py` map is still in the codebase. Scoring it with the same deletion metric gives a defensible "our rollout beats naive attention" table row, and justifies having replaced it.
+3. **Insertion curve** to complement deletion (start from a blank volume, add the highest-attributed voxels back). Deletion alone is known to be biased by out-of-distribution artefacts from the zeroing.
+4. **Uncertainty × error correlation.** Check whether the patients with catastrophic ET HD95 are the ones MC-dropout flags as uncertain. If yes, that is a strong and easily-stated "the model knows when it is wrong" result — arguably the most clinically meaningful thing in the whole XAI section.
+5. **Deploy the MC-dropout mean as the actual prediction.** It is currently measured (`dice_mc_mean` in `xai/uncertainty.json`) but not used. If it beats the deterministic prediction, it is a free ensemble already paid for.
+6. **Pick a clinical operating point** on the error-retention curve ("referring 2% of voxels raises ET Dice from X to Y") rather than showing the whole curve. Reviewers respond to a number, not a shape.
 
 ### 0.4 Recommended order for THIS model (replaces §12)
 

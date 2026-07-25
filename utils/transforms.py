@@ -10,11 +10,11 @@ from monai.transforms import (
     EnsureChannelFirstd,
     ToTensord,
     RandFlipd,
-    RandRotate90d,
+    RandAffined,
+    RandBiasFieldd,
     RandScaleIntensityd,
     RandShiftIntensityd,
     RandGaussianNoised,
-    RandZoomd,
     RandAdjustContrastd,
     RandGaussianSmoothd,
 )
@@ -131,6 +131,29 @@ class CropForegroundHWd(MapTransform):
         return d
 
 
+def build_resize(cfg):
+    """Resize H/W down to img_shape — depth is already exact by the time this
+    runs (see CropRawDepthd), so this only touches the in-plane axes.
+
+    `mode` is PER KEY here. It used to be a single mode="nearest" covering both
+    keys, which point-sampled the MRI from 240 to 128 in-plane: a 1.875x
+    downsample with no filtering, i.e. textbook aliasing, applied to exactly
+    the fine T1ce enhancement texture that ET segmentation depends on. Labels
+    must stay nearest (interpolating class ids is meaningless), but images want
+    trilinear, and a downsample additionally wants anti-aliasing — without it
+    trilinear still undersamples, it just aliases more smoothly.
+
+    Shared by the train and val/test transforms so the two cannot drift apart.
+    """
+    return Resized(
+        keys=["image", "label"],
+        spatial_size=cfg.unetr.img_shape,
+        mode=("trilinear", "nearest"),
+        align_corners=(False, None),
+        anti_aliasing=(True, False),
+    )
+
+
 def build_train_transform(cfg):
     return Compose([
         LoadImaged(keys=["image", "label"]),
@@ -146,18 +169,27 @@ def build_train_transform(cfg):
             start_slice=cfg.crop.train_start_slice,
             num_slices=cfg.unetr.img_shape[-1],
         ),
-        Resized(keys=["image", "label"],
-                spatial_size=cfg.unetr.img_shape, mode="nearest"),
+        build_resize(cfg),
         ConvertToMultiChannelBasedOnBratsClassesd(keys="label"),
         CropForegroundHWd(keys=["image", "label"], threshold=cfg.crop.threshold),
         ApplyCLAHEAndZscored(keys="image"),
 
-        # spatial — both image and label
+        # spatial — both image and label.
+        # RandRotate90 (max_k=3) used to sit here. A brain never appears
+        # rotated 90/180/270 degrees in an RAS-oriented scan, so it spent
+        # augmentation budget teaching invariance to poses that do not occur,
+        # and after the foreground crop it swapped a non-square H/W before
+        # fit_to_size padded the result back. Small-angle affine is the
+        # realistic version of the same idea.
         RandFlipd(keys=["image", "label"], prob=0.5, spatial_axis=0),
         RandFlipd(keys=["image", "label"], prob=0.5, spatial_axis=1),
         RandFlipd(keys=["image", "label"], prob=0.5, spatial_axis=2),
-        RandRotate90d(keys=["image", "label"], prob=0.5,
-                      max_k=3, spatial_axes=(0, 1)),
+        RandAffined(
+            keys=["image", "label"], prob=0.3,
+            rotate_range=(0.26, 0.26, 0.26),   # +/- ~15 degrees per axis
+            scale_range=(0.1, 0.1, 0.1),
+            mode=("bilinear", "nearest"), padding_mode="zeros",
+        ),
 
         # intensity — image only
         RandScaleIntensityd(keys="image", factors=0.1, prob=0.5),
@@ -168,6 +200,10 @@ def build_train_transform(cfg):
             sigma_x=(0.5, 1.0), sigma_y=(0.5, 1.0), sigma_z=(0.5, 1.0)
         ),
         RandAdjustContrastd(keys="image", prob=0.3, gamma=(0.7, 1.3)),
+        # Smooth multiplicative intensity drift — simulates the scanner
+        # inhomogeneity that survives N4 correction, and is the main
+        # cross-scanner nuisance for T1ce enhancement.
+        RandBiasFieldd(keys="image", prob=0.3, degree=3, coeff_range=(0.0, 0.1)),
 
         EnsureTyped(keys=["image", "label"]),
         ToTensord(keys=["image", "label"]),
@@ -191,8 +227,7 @@ def build_val_transform(cfg):
             start_slice=cfg.crop.val_start_slice,
             num_slices=cfg.unetr.img_shape[-1],
         ),
-        Resized(keys=["image", "label"],
-                spatial_size=cfg.unetr.img_shape, mode="nearest"),
+        build_resize(cfg),
         ConvertToMultiChannelBasedOnBratsClassesd(keys="label"),
         CropForegroundHWd(keys=["image", "label"], threshold=cfg.crop.threshold),
         ApplyCLAHEAndZscored(keys="image"),

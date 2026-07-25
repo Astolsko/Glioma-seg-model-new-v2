@@ -38,10 +38,60 @@ class _TinyDataset(torch.utils.data.Dataset):
         }
 
 
+class _ConstantModel(torch.nn.Module):
+    """Emits the same logit everywhere and counts its forward passes, so the
+    TTA plumbing can be checked without a real model in the way."""
+
+    def __init__(self, value, out_channels=3):
+        super().__init__()
+        self.value = value
+        self.out_channels = out_channels
+        self.calls = 0
+
+    def forward(self, x):
+        self.calls += 1
+        return torch.full((x.shape[0], self.out_channels, *x.shape[2:]),
+                          self.value, device=x.device, dtype=torch.float32)
+
+
 requires_cuda = pytest.mark.skipif(
     not torch.cuda.is_available(),
     reason="engine.py hardcodes cuda autocast — needs a CUDA device to exercise",
 )
+
+
+def test_run_inference_tta_averages_in_probability_space(tiny_unetr_kwargs, monkeypatch):
+    """The 8 flip predictions are averaged as probabilities and mapped back
+    through logit(). For a model that predicts a constant, every flip agrees,
+    so the round trip must return that exact logit — this is what guarantees
+    downstream sigmoid+threshold and AUC are unaffected by TTA.
+    """
+    from config import cfg
+    monkeypatch.setattr(cfg, "val_amp", False, raising=True)
+
+    model = _ConstantModel(1.234)
+    x = torch.randn(1, 4, *tiny_unetr_kwargs["img_shape"])
+
+    with torch.no_grad():
+        out = run_inference(model, x, cfg, tta=True)
+
+    assert torch.allclose(out, torch.full_like(out, 1.234), atol=1e-3)
+
+
+def test_run_inference_tta_flag_controls_the_number_of_passes(tiny_unetr_kwargs, monkeypatch):
+    from config import cfg
+    monkeypatch.setattr(cfg, "val_amp", False, raising=True)
+    x = torch.randn(1, 4, *tiny_unetr_kwargs["img_shape"])
+
+    plain = _ConstantModel(0.5)
+    with torch.no_grad():
+        run_inference(plain, x, cfg, tta=False)
+
+    flipped = _ConstantModel(0.5)
+    with torch.no_grad():
+        run_inference(flipped, x, cfg, tta=True)
+
+    assert flipped.calls == 8 * plain.calls
 
 
 def test_metrics_csv_fields_include_base_training_row_keys():
@@ -67,11 +117,13 @@ def test_build_model_constructs_and_runs_forward_with_tiny_cfg(tiny_unetr_kwargs
 
 def test_build_training_components_returns_expected_types(tiny_unetr, tiny_unetr_kwargs):
     from config import cfg
-    optimizer, lr_scheduler, dice_metric, dice_metric_batch, post_trans, scaler = \
-        build_training_components(tiny_unetr, cfg)
+    (optimizer, lr_scheduler, dice_metric, dice_metric_batch, post_trans, scaler,
+     ema_model) = build_training_components(tiny_unetr, cfg)
 
-    assert isinstance(optimizer, torch.optim.Optimizer)
-    assert isinstance(lr_scheduler, torch.optim.lr_scheduler.CosineAnnealingLR)
+    assert isinstance(optimizer, torch.optim.AdamW)
+    # warmup_epochs > 0 chains LinearLR into CosineAnnealingLR
+    assert isinstance(lr_scheduler, torch.optim.lr_scheduler.LRScheduler)
+    assert (ema_model is None) == (cfg.ema_decay <= 0)
 
 
 @requires_cuda
@@ -125,7 +177,7 @@ def test_validate_runs_and_returned_keys_are_subset_of_metrics_csv_fields(
                             tiny_unetr_kwargs["img_shape"])
     loader = torch.utils.data.DataLoader(dataset, batch_size=1)
 
-    _, _, dice_metric, dice_metric_batch, post_trans, _ = build_training_components(model, cfg)
+    _, _, dice_metric, dice_metric_batch, post_trans, _, _ = build_training_components(model, cfg)
     loss_fn = build_loss_fn(cfg)
 
     val_metrics = validate(model, loader, dataset, loss_fn, dice_metric, dice_metric_batch,
@@ -159,7 +211,7 @@ def test_validate_with_attention_enabled_does_not_crash_on_noncubic_shape(
     from utils.attention import register_attention_hook
     attention_cache = register_attention_hook(model)
 
-    _, _, dice_metric, dice_metric_batch, post_trans, _ = build_training_components(model, cfg)
+    _, _, dice_metric, dice_metric_batch, post_trans, _, _ = build_training_components(model, cfg)
     loss_fn = build_loss_fn(cfg)
 
     validate(model, loader, _FakeValDS(), loss_fn, dice_metric, dice_metric_batch,

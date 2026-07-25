@@ -175,10 +175,10 @@ def plot_metrics_from_csv(csv_path, plots_dir):
 
     save_plot(
         [_as_float_series(rows, "train_loss"), _as_float_series(rows, "val_loss")],
-        ['Train loss (0.5*Dice + 0.3*Focal + 0.2*HausdorffDT)',
-         'Val loss (0.5*Dice + 0.3*Focal + 0.2*HausdorffDT)'],
+        ['Train loss (Dice + Focal-Tversky + annealed HausdorffDT)',
+         'Val loss (Dice + Focal-Tversky + annealed HausdorffDT)'],
         ['#2c6fad', '#c0392b'],
-        'Combined Dice + Focal + Hausdorff Loss',
+        'Combined Dice + Focal-Tversky + Hausdorff Loss',
         'Epoch', 'Loss',
         'loss.png'
     )

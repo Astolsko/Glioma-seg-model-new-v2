@@ -5,7 +5,6 @@ import torch
 from monai.data import decollate_batch
 from monai.inferers import sliding_window_inference
 from monai.metrics import DiceMetric
-from monai.transforms import Activations, AsDiscrete, Compose
 from tqdm import tqdm
 
 from utils.attention import register_attention_hook, save_attention_overlay, save_attention_evolution
@@ -14,6 +13,7 @@ from utils.metrics import (
     compute_hd95, compute_sensitivity, compute_iou, compute_miou,
     compute_confusion, compute_specificity, compute_f1, compute_roc_auc,
 )
+from utils.postprocess import binarize, postprocess
 from utils.plot import plot_test_qualitative
 from utils.progress import RunTimeEstimator, format_duration
 from utils.transforms import fit_to_size
@@ -75,34 +75,108 @@ def build_model(cfg, device):
     return model
 
 
+def build_lr_scheduler(optimizer, cfg):
+    """Linear warmup then cosine decay. Warmup matters more now that training
+    runs long enough for the cosine tail to be reached."""
+    cosine = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=max(cfg.epoch - cfg.warmup_epochs, 1), eta_min=1e-6,
+    )
+    if cfg.warmup_epochs <= 0:
+        return cosine
+    warmup = torch.optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=0.01, total_iters=cfg.warmup_epochs,
+    )
+    return torch.optim.lr_scheduler.SequentialLR(
+        optimizer, [warmup, cosine], milestones=[cfg.warmup_epochs],
+    )
+
+
 def build_training_components(model, cfg):
-    optimizer = torch.optim.Adam(model.parameters(), cfg.learning_rate, weight_decay=cfg.weight_decay)
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epoch, eta_min=1e-6)
-    dice_metric = DiceMetric(include_background=True, reduction="mean")
-    dice_metric_batch = DiceMetric(include_background=True, reduction="mean_batch")
-    post_trans = Compose([Activations(sigmoid=True), AsDiscrete(threshold=0.5)])
-    scaler = torch.amp.GradScaler('cuda')
-    torch.backends.cudnn.benchmark = True
-    return optimizer, lr_scheduler, dice_metric, dice_metric_batch, post_trans, scaler
+    # AdamW decouples weight decay from the gradient update; plain Adam with
+    # weight_decay applies it as coupled L2, which interacts badly with the
+    # per-parameter LR scaling.
+    optimizer = torch.optim.AdamW(model.parameters(), cfg.learning_rate,
+                                  weight_decay=cfg.weight_decay)
+    lr_scheduler = build_lr_scheduler(optimizer, cfg)
 
-
-def run_inference(model, inputs, cfg):
-    def _compute():
-        return sliding_window_inference(
-            inputs=inputs,
-            roi_size=cfg.unetr.img_shape,
-            sw_batch_size=1,
-            predictor=model,
+    # torch ships EMA — no reason to hand-roll one. No BatchNorm anywhere in
+    # this model (GroupNorm/LayerNorm only), so there are no running stats
+    # needing a post-hoc update_bn pass over the training set.
+    ema_model = None
+    if cfg.ema_decay > 0:
+        ema_model = torch.optim.swa_utils.AveragedModel(
+            model,
+            multi_avg_fn=torch.optim.swa_utils.get_ema_multi_avg_fn(cfg.ema_decay),
         )
 
-    if cfg.val_amp:
-        with torch.amp.autocast('cuda', dtype=torch.bfloat16):
-            return _compute()
-    return _compute()
+    dice_metric = DiceMetric(include_background=True, reduction="mean")
+    dice_metric_batch = DiceMetric(include_background=True, reduction="mean_batch")
+
+    # Per-channel thresholds instead of MONAI's scalar-only AsDiscrete. The
+    # per-epoch loop deliberately does NOT run the connected-component
+    # cleanup: its thresholds are tuned on this same split, so folding them in
+    # here would let post-processing hyperparameters pick the checkpoint.
+    def post_trans(logits):
+        return binarize(logits, cfg.infer.thresholds)
+
+    scaler = torch.amp.GradScaler('cuda')
+    torch.backends.cudnn.benchmark = True
+    return optimizer, lr_scheduler, dice_metric, dice_metric_batch, post_trans, scaler, ema_model
+
+
+# The 8 axis-flip combinations over the spatial dims of a (B, C, H, W, D)
+# tensor. A flip is its own inverse, so the same dims undo it on the way back.
+_TTA_FLIPS = [(), (2,), (3,), (4,), (2, 3), (2, 4), (3, 4), (2, 3, 4)]
+
+
+def run_inference(model, inputs, cfg, tta=None):
+    """Sliding-window inference, always returning LOGITS so every caller keeps
+    its own sigmoid/threshold — there is exactly one contract here, no
+    "sometimes probabilities" mode to trip over.
+
+    With TTA the 8 flip predictions are averaged in PROBABILITY space
+    (averaging logits would let the single most over-confident flip dominate)
+    and mapped back through logit(), the exact inverse of sigmoid — so
+    downstream thresholding and AUC are unaffected by the round trip.
+
+    `tta=None` defers to cfg.infer.tta_flips. The per-epoch validation loop
+    passes tta=False explicitly: 8x inference on every epoch would cost more
+    than the training step it is meant to be checking.
+    """
+    def _sliding_window(x):
+        def _compute():
+            return sliding_window_inference(
+                inputs=x,
+                roi_size=cfg.unetr.img_shape,
+                sw_batch_size=1,
+                predictor=model,
+                overlap=cfg.infer.sw_overlap,
+                mode=cfg.infer.sw_mode,
+            )
+
+        if cfg.val_amp:
+            with torch.amp.autocast('cuda', dtype=torch.bfloat16):
+                return _compute()
+        return _compute()
+
+    use_tta = cfg.infer.tta_flips if tta is None else tta
+    if not use_tta:
+        return _sliding_window(inputs)
+
+    prob_sum = None
+    for dims in _TTA_FLIPS:
+        out = _sliding_window(torch.flip(inputs, dims) if dims else inputs)
+        out = torch.sigmoid(out.float())
+        if dims:
+            out = torch.flip(out, dims)
+        prob_sum = out if prob_sum is None else prob_sum + out
+
+    prob = (prob_sum / len(_TTA_FLIPS)).clamp(1e-6, 1.0 - 1e-6)
+    return torch.logit(prob)
 
 
 def train_one_epoch(model, train_loader, train_ds, optimizer, scaler, loss_fn, device, cfg, epoch,
-                     estimator=None, console=None):
+                     estimator=None, console=None, ema_model=None):
     model.train()
     epoch_loss = 0
     step = 0
@@ -130,6 +204,8 @@ def train_one_epoch(model, train_loader, train_ds, optimizer, scaler, loss_fn, d
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
+        if ema_model is not None:
+            ema_model.update_parameters(model)
         epoch_loss += loss.item()
 
         if estimator is not None:
@@ -172,7 +248,10 @@ def validate(model, val_loader, val_ds, loss_fn, dice_metric, dice_metric_batch,
                 val_data["image"].to(device),
                 val_data["label"].to(device),
             )
-            val_outputs = run_inference(model, val_inputs, cfg)
+            # tta=False: the per-epoch loop runs every epoch, so 8x flip
+            # inference here would cost more than the training it monitors.
+            # Test/evaluate.py turn it on.
+            val_outputs = run_inference(model, val_inputs, cfg, tta=False)
             val_loss_epoch += loss_fn(val_outputs, val_labels).item()
             val_steps += 1
             val_outputs_raw = [i.detach().cpu() for i in decollate_batch(val_outputs)]
@@ -315,9 +394,15 @@ def run_training(model, loaders, loss_fn, device, cfg, run_logger):
     train_loader, train_ds = loaders["train_loader"], loaders["train_ds"]
     val_loader, val_ds = loaders["val_loader"], loaders["val_ds"]
 
-    optimizer, lr_scheduler, dice_metric, dice_metric_batch, post_trans, scaler = build_training_components(model, cfg)
+    (optimizer, lr_scheduler, dice_metric, dice_metric_batch, post_trans, scaler,
+     ema_model) = build_training_components(model, cfg)
 
-    attention_cache = register_attention_hook(model) if cfg.attention.enabled else {}
+    # Everything downstream of training — validation, attention hooks, the
+    # saved checkpoint — looks at the EMA weights when EMA is enabled, so the
+    # metrics that pick the best epoch describe the weights that get shipped.
+    eval_model = model if ema_model is None else ema_model.module
+
+    attention_cache = register_attention_hook(eval_model) if cfg.attention.enabled else {}
 
     run_logger.open_metrics_csv(METRICS_CSV_FIELDS)
 
@@ -342,7 +427,7 @@ def run_training(model, loaders, loss_fn, device, cfg, run_logger):
 
         epoch_loss = train_one_epoch(
             model, train_loader, train_ds, optimizer, scaler, loss_fn, device, cfg, epoch,
-            estimator=estimator, console=run_logger.console,
+            estimator=estimator, console=run_logger.console, ema_model=ema_model,
         )
         lr_scheduler.step()
 
@@ -355,7 +440,7 @@ def run_training(model, loaders, loss_fn, device, cfg, run_logger):
 
         if (epoch + 1) % cfg.val_interval == 0:
             val_metrics = validate(
-                model, val_loader, val_ds, loss_fn, dice_metric, dice_metric_batch,
+                eval_model, val_loader, val_ds, loss_fn, dice_metric, dice_metric_batch,
                 post_trans, device, cfg, epoch, attention_cache, run_logger.attention_dir,
                 estimator=estimator, console=run_logger.console,
             )
@@ -367,7 +452,7 @@ def run_training(model, loaders, loss_fn, device, cfg, run_logger):
                 best_metric_epoch = epoch + 1
                 not_improved_epoch = 0
                 row["is_best"] = True
-                torch.save(model.state_dict(), run_logger.checkpoint_path)
+                torch.save(eval_model.state_dict(), run_logger.checkpoint_path)
             else:
                 not_improved_epoch += 1
                 if not_improved_epoch >= cfg.patience:
@@ -398,7 +483,17 @@ def run_test(model, loaders, loss_fn, device, cfg, run_logger):
 
     dice_metric = DiceMetric(include_background=True, reduction="mean")
     dice_metric_batch = DiceMetric(include_background=True, reduction="mean_batch")
-    post_trans = Compose([Activations(sigmoid=True), AsDiscrete(threshold=0.5)])
+
+    # Unlike the per-epoch validation loop, the final test pass applies the
+    # full inference recipe: tuned per-channel thresholds AND the
+    # connected-component cleanup that suppresses stray ET blobs.
+    def post_trans(logits):
+        return postprocess(binarize(logits, cfg.infer.thresholds), cfg)
+
+    print(f"Test inference | thresholds={tuple(cfg.infer.thresholds)} "
+          f"| tta_flips={cfg.infer.tta_flips} | sw_overlap={cfg.infer.sw_overlap} "
+          f"({cfg.infer.sw_mode}) | min_component={tuple(cfg.infer.min_component_voxels)} "
+          f"| min_total={tuple(cfg.infer.min_total_voxels)}")
 
     sample = test_ds[0]
     print("image shape:", sample["image"].shape)
