@@ -6,11 +6,221 @@ change or decision. Keep it terse: what changed, why, and the measured effect
 
 Metric shorthand: Dice/HD95 reported as TC / WT / ET (+ mean). Lower HD95 better.
 
-Baseline to beat (`logs/v1-run3`, 50 ep):
+Baseline to beat (`logs/v1-run3`, 50 ep) — HD95 here is in the OLD, WRONG units
+(spacing was `(1,1,1)`; true in-plane is 1.875mm), so multiply in-plane by up to
+1.875x before comparing it to anything newer:
 - Val Dice (best ep46): 0.821 / 0.892 / **0.783** / 0.832
 - Val HD95 ep50 (mm): 4.26 / 4.12 / **21.0** / 9.80
 - Test Dice: 0.817 / 0.892 / 0.818 / 0.842
 - Test HD95 (mm): 9.10 / 3.97 / **39.7** / 17.6
+
+Current state (`logs/run1-new-version`, 100 ep, EMA weights @ ep91), HD95 in
+CORRECT units, test pass with TTA + tuned thresholds + post-processing:
+- Val Dice (best ep91): 0.818 / 0.880 / **0.730** / 0.809
+- Test Dice: 0.848 / 0.894 / **0.753** / 0.832
+- Test HD95 (mm): 4.55 / 4.63 / 24.50 / 11.22
+- Test HD95 **excluding empty-mismatch patients**: 4.55 / 4.63 / **3.65**
+- 19.6 min/epoch (baseline: 42.0)
+
+---
+
+## 2026-07-29 — Session 4: read the Tier-B run; ET diagnosis overturned
+
+The Tier A+B bundle ran as `logs/run1-new-version` (100 ep, 32.7h). This session
+read it, ran three no-retrain ablations off its checkpoint, and found that the
+premise of Sessions 1–3 was wrong.
+
+**THE FINDING — ET HD95 was never a boundary problem.**
+The new per-direction breakdown in `run_test` decomposes test ET HD95 = 24.50mm as:
+
+| component | contribution |
+|---|---|
+| 4 patients x 374.0 empty-mismatch sentinel | **21.37mm (87%)** |
+| 60 patients x 3.65mm real boundary | 3.13mm |
+| 6 patients correctly both-empty (scored 0.0) | 0.00mm |
+
+Verified exact: `4*374 + 60*3.6497 + 6*0 = 1714.98 / 70 = 24.49976`, matching the
+reported value to 14 digits. **ET's real boundary quality is 3.65mm — BETTER than
+TC (4.55) and WT (4.63).** TC and WT have zero empty-mismatch, so their numbers
+were always clean. `plan.md` §0.1's "ET HD95 is the disaster, 5-10x worse than
+TC" — the premise for three sessions of Hausdorff annealing, boundary weighting
+and connected-component work — is **false**. ET geometry is the best of the
+three. What remains is a **presence/absence error on 4 of 70 patients**.
+(plan.md §0.1/§0.3 corrected accordingly.)
+
+**Results vs `v1-run3`. Val is the clean comparison (identical protocol);
+the test rows are NOT an ablation — the inference recipe changed too.**
+
+| Val, best epoch | v1-run3 ep46 | run1 ep91 | Δ |
+|---|---|---|---|
+| Dice TC / WT / ET | 0.821 / 0.892 / 0.783 | 0.818 / 0.880 / 0.730 | -0.002 / -0.012 / **-0.053** |
+| mean Dice | 0.832 | 0.809 | **-0.023** |
+| Sens TC / WT / ET | 0.837 / 0.881 / 0.748 | 0.794 / 0.847 / 0.679 | -0.044 / -0.033 / **-0.069** |
+
+**Sensitivity fell on ALL THREE channels while specificity rose — a uniform
+recall regression, not an ET-specific one.** ET shows it worst because ET is
+smallest. Strip post-processing out of the test number and ET is 0.7637 vs the
+baseline's 0.8184 = **-0.055, matching the val -0.053 almost exactly**: the val
+and test ET drops are one phenomenon, and it is training-side.
+
+**What each change actually bought:**
+- Aux heads -> Dice only: **19.6 vs 42.0 min/epoch = 2.14x faster.** The one
+  clean, uncontaminated win (it removed 2 of 3 scipy distance transforms/step).
+- Epochs 50 -> 100: **+0.009 val mean Dice for 16 hours.** 99% of the final value
+  was reached at ep50, 99.5% at ep65; ep66-100 moved it 0.002. Not worth it.
+- Post-processing: costs **0.011 ET Dice**, buys **10.1mm ET HD95** (mismatches
+  ~6 -> 4). Net positive but crude — the 0.011, over ~60 scored patients, is
+  about one real-ET patient being zeroed outright.
+- HD95 spacing fix: numbers are honest now. **Most of the apparent "ET HD95 2-3x
+  better" was post-processing, not the retrain** — raw ET HD95 is 34.63mm.
+- The remaining seven training-side changes: net **-0.023 val mean Dice**, and
+  **which one caused it is unknown.** Seven changes landed in one run.
+
+**Phase 0 ablations run (all from `run1-new-version`'s EMA checkpoint, no retrain):**
+
+| tag | thresholds | postproc | Dice TC/WT/ET | mean | HD95 ET |
+|---|---|---|---|---|---|
+| (published) | 0.3/0.3/0.5 | on | 0.845 / 0.895 / 0.753 | 0.831 | 24.50 |
+| `nopp` | 0.3/0.3/0.5 | off | 0.845 / 0.895 / 0.764 | 0.834 | 34.63 |
+| `wide` | 0.15/0.15/0.5 | on | 0.848 / 0.894 / 0.753 | 0.832 | 24.50 |
+
+TC/WT identical to 4 d.p. across tags => the split is deterministic and these
+are true single-variable ablations.
+
+**BUG found in the threshold sweep (fixed).** `search_thresholds._dice` scored
+both-empty as **1.0**, but the reported metric — MONAI `DiceMetric(ignore_empty=True)`
+in `run_test` — **excludes** empty-GT patients. So the sweep was rewarded for
+zeroing ET on ET-negative patients on a metric that never sees it. Symptom: an
+otherwise perfectly monotone ET curve with a lone **+0.017 spike at exactly 0.50**
+(raise the threshold, one ET-negative patient tips under `min_total=100`, gets
+zeroed, collects a free +1.0 ~ +0.01 on ~100 val patients; at 0.55 a different
+patient with real ET is zeroed and gives it back). **run1-new-version's published
+ET threshold of 0.5 was picked by one lucky patient.**
+
+**Calibration is badly off.** With the grid widened to 0.15, TC and WT both
+pinned at the new floor again, monotone decreasing across 0.15-0.70. EMA logit
+shrinkage is real and larger than expected; every val Dice ever reported (all at
+0.5) understates the model. Grid now extends to 0.05.
+
+**XAI verdicts against `plan.md` §0.7.1 gates:**
+- **G6 modality — PASS, and it is the strongest result in the run.** Removing
+  T1ce: ET 0.706 -> 0.119 (Δ **-0.588**), TC Δ -0.505, WT only -0.066. Removing
+  FLAIR: WT 0.892 -> 0.311 (Δ **-0.581**). Exactly the radiological prior, and
+  falsifiable. T2 is near-redundant (Δ -0.03 to -0.05) — worth a sentence.
+- **G7 uncertainty — PASS.** Referring the 2% most-uncertain voxels lifts s0 ET
+  Dice 0.699 -> 0.952, s1 ET 0.682 -> 0.978. Quote one operating point, not the curve.
+- **G4/G5 — VOID, and it is a code bug, not a finding about the model.**
+  `component_faithful` uses `cfg.xai.cam_layers[-1]` = `decoder0_header.1`, which
+  is **one 1x1x1 conv from the output** (`decoder0_header.2`). So
+  d(score)/d(activation) is *exactly zero* outside the ROI and **the CAM support
+  IS the ground-truth mask** — `cam.json` confirms it, `mass_in_tumor = 0.9999999`.
+  Consequences: the deletion curve measures "deleting the tumour destroys the
+  prediction" (trivially true); randomisation SSIM cannot move (0.9860 -> 0.9863
+  flat, even after randomising the transformer) because the support is pinned and
+  SSIM over a ~95%-zero volume is background-dominated; and `localization`'s
+  `top_frac=0.05` selects ~78k voxels against a ~3-8k support, so `elsewhere:
+  0.87-0.99` is argsort breaking ties by array index. Also `mass_in_tumor` is a
+  tautology under `cam_roi="gt"`.
+  **Decision: headline is Dice/HD95, so X1/X5 are CUT from the paper, not
+  repaired.** Keep `modality` + `uncertainty` only.
+
+**Decisions taken this session (user):**
+1. `v1-run3`'s checkpoint is **gone** — Tier A's isolated effect is permanently
+   unrecoverable. Stop trying; do not re-plan around it.
+2. **One more training run only.**
+3. **Move to native 1mm** (plan §0.7.2 #1). Numbers will drop; that is expected
+   and is the point.
+4. Paper headline is **Dice/HD95**; XAI is a supporting section.
+
+**Code changed (all no-retrain, all verified byte-compiling):**
+- `config.py`: `infer.thresholds` default `(0.5,0.5,0.5)` -> **`(0.3,0.3,0.5)`** so
+  an `--no-postprocess` ablation changes ONE thing vs the published run; plus the
+  mm^3 rescale warning on `min_component_voxels`/`min_total_voxels`.
+- `utils/postprocess.py`: grid `0.30-0.70` -> **`0.05-0.70`**; **empty-GT patients
+  now skipped** (matches `DiceMetric(ignore_empty=True)`); sweep JSON gained
+  `n_scored`/`n_samples`; `tune_and_save` gained `filename=` so a re-tune cannot
+  clobber the sweep it is trying to beat.
+- `evaluate.py`: writes `threshold_sweep_<tag>.json`.
+- `utils/engine.py`: `run_test` now prints and records the **HD95 breakdown** —
+  `n_halluc` (pred non-empty, GT empty) / `n_miss` (pred empty, GT non-empty) /
+  `hd95_*_clean` over both-non-empty cases / `n_test`. The two mismatch
+  directions need OPPOSITE fixes to `min_total_voxels`, so lumping them was how
+  you tune that knob backwards.
+- `tests/test_postprocess.py`: new test pinning the empty-GT skip.
+
+---
+
+## NEXT SESSION — start here
+
+### 1. A command was left running. Read its output first.
+
+```bash
+pytest -q
+python evaluate.py --run run1-new-version --tag final --tune-thresholds   # ~1h
+```
+
+Outputs: `logs/run1-new-version/eval/test_metrics_final.csv`,
+`eval/threshold_sweep_final.json`, and an `HD95 breakdown ...` line in stdout.
+If it was not run, run it — it is the last cheap information available.
+
+**What to look for, and what each answer changes:**
+
+| Look at | If | Then |
+|---|---|---|
+| `n_halluc_et` vs `n_miss_et` | mostly **hallucinated** | the model invents ET on ET-negative patients. RAISE `min_total_voxels`. Predicted: ~3 halluc + ~1 miss |
+| same | mostly **missed** | `min_total=100` is deleting real ET. LOWER it. This is the OPPOSITE of plan.md gate G2's assumption — G2 is written on the old, wrong diagnosis |
+| `hd95_et_clean` | still ~3.6mm | confirms ET boundaries are fine; do NOT spend the 1mm run on boundary work |
+| ET best threshold | no longer 0.5 | confirms the both-empty bug was what picked it. Expect it to move below 0.5 |
+| TC/WT best threshold | pinned at 0.05 again | calibration is worse still; note it, do not chase it — the 1mm run re-tunes anyway |
+
+### 2. Then design the single 1mm run. Change list, and nothing beyond it.
+
+Target is the **recall regression** (-0.055 ET Dice, -0.03 to -0.07 sens on all
+three channels). It is the only measured defect left.
+
+1. **Native 1mm.** Delete `transforms.build_resize`; `RandCropByPosNegLabeld(spatial_size=(128,128,128), pos=2, neg=1)`
+   for train, `CropForegroundd` + sliding window for val/test. Drop
+   `CropRawDepthd` on **all** splits — leaving the fixed `[40:136)` window on
+   val/test carries finding D straight into the "honest" numbers.
+2. **Aux heads: Dice + Focal-Tversky** (Hausdorff stays OFF). The 2.14x speedup
+   came from dropping the scipy distance transform; Tversky is cheap GPU work and
+   it was the false-negative pressure term. Keep the speedup, get the recall back.
+3. **`RandBiasFieldd` before `ApplyCLAHEAndZscored`, or drop it.** It currently
+   runs at `transforms.py:206`, AFTER normalisation at `:175` — a multiplicative
+   field on signed z-scored data is not a bias field, and it perturbs exactly the
+   T1ce enhancement contrast ET is defined by.
+4. **Epochs 50, not 100.** See the measured +0.009-for-16h above.
+5. **`cfg.xai.components = ["modality", "uncertainty"]`.** X1/X5 are cut, and
+   dropping `faithful` also removes a weight-randomising step from the end of a
+   long run.
+
+**Do NOT touch the Hausdorff term.** 3.65 / 4.55 / 4.63mm says it is working.
+It was tempting to cut it; the measurement says no.
+
+**Three landmines in the 1mm migration, in order of how silently they corrupt:**
+1. `cfg.metrics.voxel_spacing` is **derived** as `(240/img_shape[0], ...)`. With
+   `img_shape=(128,128,128)` it computes 1.875 and inflates every HD95 by 1.875x
+   while looking correct. **Hard-code `(1,1,1)` and delete the derivation.**
+2. `Transformer(cube_size=img_shape)` sizes the positional embedding. Train patch
+   size, `cfg.unetr.img_shape` and sliding-window `roi_size` must ALL be
+   `(128,128,128)`.
+3. `min_component_voxels`/`min_total_voxels` are VOXEL counts. One voxel goes
+   3.52mm^3 -> 1mm^3, so the same numbers become a **3.5x weaker** cleanup.
+   Rescale to `(0,0,176)` / `(0,0,352)`.
+
+**Cost estimate: 45-60 min/epoch, ~40-50h at 50 epochs** (128^3 is 1.33x the
+activations and 1.78x the attention of 128x128x96; sliding-window val over full
+volumes is the real blowup, hence `CropForegroundd` on val).
+
+### 3. Known and accepted after that run
+
+- **The recall regression will not have been isolated.** 1mm numbers are not
+  comparable to any of the four existing runs, and there is no budget left. If
+  1mm ET lands low, reason from the Phase 0 ablations above, not from a
+  controlled comparison. This is the priced-in cost of one run.
+- **The test split is ~10% (n=70) with no CV.** A ±0.03 ET swing is inside its
+  noise. Every test-set claim above carries this caveat. 5-fold CV
+  (plan §0.7.2 #2) is still the thing a reviewer will ask for first.
 
 ---
 

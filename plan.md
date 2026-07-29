@@ -19,6 +19,27 @@
 - The binding constraint is **ET on both Dice AND HD95**. TC HD95 is *fine* (~4 mm val). The original report's repeated claim that "TC HD95 ~13 mm is the worst" (§1, §3.1, §9) is **wrong for this model** — ET HD95 is 5–10× worse than TC.
 - ET HD95 of 21–40 mm with ET Dice already ~0.78–0.82 is the signature of **stray false-positive ET blobs + empty-mismatch cases**, not poor overlap. `utils/metrics.py:compute_hd95` returns **374.0** whenever exactly one of {pred, gt} is empty; a handful of near-empty-ET patients where the model emits a few FP voxels dominates the ET HD95 average. This makes **post-processing (small-component / small-volume ET suppression) the single highest-leverage ET-HD95 fix** — it was ranked "MED, do late" in §10 but should be near the top.
 
+> **CORRECTION (2026-07-29, Session 4) — measured, and this section overstates the case.**
+> The empty-mismatch *mechanism* identified above is right. The framing built on
+> top of it — "ET is catastrophic", "ET HD95 is 5–10× worse than TC", ET as the
+> binding constraint on HD95 — is **wrong**, and it directed three sessions of
+> Hausdorff/boundary/component work at a problem that does not exist.
+>
+> `run_test` now decomposes HD95 (`n_halluc` / `n_miss` / `hd95_*_clean`). On
+> `logs/run1-new-version`, test ET HD95 = 24.50 mm is:
+> **4 patients × 374.0 = 21.37 mm (87%)**, plus 60 patients averaging **3.65 mm**,
+> plus 6 correctly-both-empty scoring 0.0. Verified exact against the reported value.
+>
+> **ET's real boundary quality is 3.65 mm — better than TC (4.55) and WT (4.63).**
+> TC and WT have zero empty-mismatch, so their figures were always clean. ET
+> geometry is the **best** of the three regions. What is left is a
+> presence/absence error on **4 of 70 patients**, and a **recall** deficit on Dice
+> (−0.055 ET, with sensitivity down on all three channels). Boundary quality is
+> not a remaining problem for this model — do not spend a run on it.
+>
+> Consequence for §0.4 / §10 ordering: the ET work to do is **recall and
+> detection**, not boundaries. See `journal.md` 2026-07-29.
+
 ### 0.2 Original plan items that are ALREADY DONE (do not re-implement)
 
 | §10 item | Status in code | Evidence |
@@ -81,8 +102,9 @@ Answer these against `logs/<new-run>/` before writing any code. Each one changes
 | # | Look at | If | Then |
 |---|---|---|---|
 | G1 | `eval/threshold_sweep.json` | best ET threshold is far from 0.5 (< 0.4 or > 0.6) | the model is badly calibrated on ET — Focal-Tversky α is inflating FPs. Consider α 0.7 → 0.6, or per-channel α/β (0.7.2 #4) |
-| G2 | `testing/test_metrics.csv` ET HD95 | still > 10 mm after post-processing | the min-volume floor is too low. Sweep `min_total_voxels` on val (100 → 250 → 500) before touching the model |
+| G2 | ~~ET HD95 > 10 mm → raise `min_total_voxels`~~ | **SUPERSEDED (Session 4)** | The gate assumed one direction. `run_test` now reports `n_halluc` vs `n_miss` separately — read THAT. Hallucinations want `min_total` raised, misses want it lowered, and the aggregate cannot tell you which. Also read `hd95_*_clean`, not the raw mean |
 | G3 | ET Dice vs `v1-run3`'s 0.783 | improved < 0.01 | the trilinear-resampling fix was NOT the ET ceiling → the ceiling is resolution itself, go to 0.7.2 #1 (native 1 mm) |
+| | **FIRED (Session 4):** ET Dice went *down* to 0.730 val / 0.764 test-without-postproc. Native 1 mm decided. | | |
 | G4 | `xai/faithful.json` sanity check | SSIM does not decay across the cascade | **stop and fix before publishing anything XAI** — the CAM is edge-detecting, not explaining, and every X1/X5 conclusion is void |
 | G5 | `xai/faithful.json` deletion AUC | CAM AUC ≈ random-null AUC | same problem, different symptom. The explanation carries no information |
 | G6 | `xai/modality.json` | ET does *not* collapse when T1ce is removed, or WT does not collapse without FLAIR | the model is right for the wrong reasons — a far more interesting (and publishable) finding than a good Dice, but it must be investigated, not buried |

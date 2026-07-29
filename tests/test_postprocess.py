@@ -100,6 +100,41 @@ def test_search_thresholds_recovers_the_threshold_that_maximises_dice(infer_cfg)
     assert sweep["dice_mean"][1] == pytest.approx([1.0, 1.0, 1.0])
 
 
+def test_search_thresholds_skips_patients_with_an_empty_ground_truth(infer_cfg):
+    # An ET-negative patient that the model correctly leaves empty used to
+    # score a free 1.0 here, while the reported metric — MONAI's
+    # DiceMetric(ignore_empty=True) in run_test — drops it. That gap let a
+    # rising threshold buy Dice by predicting nothing, which is what put the
+    # spurious +0.017 spike at exactly 0.50 in run1-new-version's ET sweep.
+    shape = (3, 4, 4, 4)
+
+    gt_a = np.zeros(shape, dtype=np.float32)
+    gt_a[:, :2] = 1.0                       # 32 of 64 voxels per channel
+    prob_a = np.full(shape, 0.65, np.float32)   # predicts all 64 -> Dice 2/3
+
+    gt_b = np.zeros(shape, dtype=np.float32)    # nothing to find
+    prob_b = np.full(shape, 0.45, np.float32)   # and nothing predicted
+
+    def batch(gt):
+        return {"image": torch.zeros(1, 4, *shape[1:]),
+                "label": torch.from_numpy(gt).unsqueeze(0)}
+
+    logits = iter([torch.from_numpy(np.log(p / (1 - p))).unsqueeze(0)
+                   for p in (prob_a, prob_b)])
+
+    best, sweep = search_thresholds(
+        model=None, loader=[batch(gt_a), batch(gt_b)], device="cpu",
+        cfg=infer_cfg, inferer=lambda _model, _x: next(logits),
+        candidates=[0.5], apply_postprocess=False,
+    )
+
+    assert sweep["n_samples"] == 2
+    assert sweep["n_scored"] == [1, 1, 1]        # patient B contributed nothing
+    # 2/3, not (2/3 + 1)/2 = 5/6 as the old both-empty-is-perfect rule gave.
+    assert sweep["dice_mean"][0] == pytest.approx([2 / 3] * 3)
+    assert best == (0.5, 0.5, 0.5)
+
+
 def test_search_thresholds_returns_config_default_on_empty_loader(infer_cfg):
     best, sweep = search_thresholds(
         model=None, loader=[], device="cpu", cfg=infer_cfg,

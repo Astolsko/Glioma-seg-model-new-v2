@@ -87,6 +87,7 @@ def main():
             model, loaders["val_loader"], device, cfg,
             paths.checkpoint_path, paths.eval_dir,
             inferer=lambda m, x: run_inference(m, x, cfg),
+            filename=f"threshold_sweep_{args.tag}.json",
         )
 
     # run_test reloads the checkpoint itself, so the tuning pass above cannot

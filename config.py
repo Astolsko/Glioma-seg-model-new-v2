@@ -149,7 +149,13 @@ cfg.infer.tta_flips = True
 # Per-channel (TC, WT, ET) probability thresholds. 0.5 is only optimal if the
 # model is perfectly calibrated per class, which a recall-weighted loss makes
 # unlikely. Tune with: python evaluate.py --run <name> --tune-thresholds
-cfg.infer.thresholds = (0.5, 0.5, 0.5)
+#
+# These are run1-new-version's tuned values, promoted from its
+# eval/threshold_sweep.json. They are the default so that an ablation like
+# `evaluate.py --no-postprocess` changes ONE thing versus that run's published
+# testing/test_metrics.csv — with the old (0.5, 0.5, 0.5) default it would have
+# silently changed the thresholds too, and the comparison would mean nothing.
+cfg.infer.thresholds = (0.3, 0.3, 0.5)
 
 # Search the thresholds above on the VAL split at the end of training, before
 # the test pass runs. Tuning on val and reporting on test is the whole point —
@@ -167,6 +173,15 @@ cfg.infer.tune_thresholds_after_training = True
 # so a handful of stray FP voxels on an ET-negative patient costs more HD95
 # than every correctly segmented patient combined. One in-plane voxel is
 # 1.875 x 1.875 x 1.0 mm = 3.5mm^3, so 50 voxels is ~176mm^3.
+#
+# These are VOXEL counts, and the voxel is not a fixed size. Moving to native
+# 1mm training makes one voxel 1mm^3 instead of 3.5mm^3, so the same numbers
+# would silently become a 3.5x WEAKER cleanup — rescale to (0, 0, 176) and
+# (0, 0, 352) at that point, or derive both from mm^3 and cfg.metrics.voxel_spacing.
+#
+# Measured on run1-new-version (evaluate.py --tag nopp --no-postprocess):
+# this cleanup costs 0.011 ET Dice and buys 10.1mm ET HD95. Net positive,
+# but the min_total rule is all-or-nothing and is what creates Dice-0 patients.
 cfg.infer.min_component_voxels = (0, 0, 50)
 cfg.infer.min_total_voxels = (0, 0, 100)
 

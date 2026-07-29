@@ -507,10 +507,28 @@ def run_test(model, loaders, loss_fn, device, cfg, run_logger):
 
     metric_sums = {
         "hd95": np.zeros(3, dtype=np.float64),
+        "hd95_clean": np.zeros(3, dtype=np.float64),
         "sens": np.zeros(3, dtype=np.float64),
         "iou": np.zeros(3, dtype=np.float64),
     }
     sample_count = 0
+
+    # The mean HD95 averages two populations that have nothing to do with each
+    # other. compute_hd95 returns the 374.0 sentinel whenever exactly one of
+    # {pred, gt} is empty, so on a channel like ET — where a good fraction of
+    # patients simply have no enhancing tumour — the reported millimetres are
+    # mostly a PATIENT COUNT in disguise: a couple of empty-mismatch cases
+    # outweigh every correctly segmented boundary in the split. Counting them
+    # separately, and averaging HD95 over the both-non-empty cases only, splits
+    # "how many patients did we get categorically wrong" from "how good are the
+    # boundaries when we get it right" — two numbers, both readable.
+    # Split by direction, because the two need opposite fixes: a hallucination
+    # (we found a tumour that is not there) wants min_total_voxels RAISED, a
+    # miss (we deleted or never found a real one) wants it LOWERED. Lumping
+    # them together is how you tune that knob in the wrong direction.
+    n_halluc = np.zeros(3, dtype=np.int64)       # pred non-empty, gt empty
+    n_miss = np.zeros(3, dtype=np.int64)         # pred empty, gt non-empty
+    n_clean = np.zeros(3, dtype=np.int64)        # both non-empty
 
     dice_metric.reset()
     dice_metric_batch.reset()
@@ -539,7 +557,15 @@ def run_test(model, loaders, loss_fn, device, cfg, run_logger):
                     tp, fp, fn = compute_confusion(pred_c, gt_c)
                     metric_sums["sens"][c] += compute_sensitivity(tp, fn)
                     metric_sums["iou"][c] += compute_iou(tp, fp, fn)
-                    metric_sums["hd95"][c] += compute_hd95(pred_c, gt_c, cfg.metrics.voxel_spacing)
+                    hd = compute_hd95(pred_c, gt_c, cfg.metrics.voxel_spacing)
+                    metric_sums["hd95"][c] += hd
+                    if pred_c.any() and not gt_c.any():
+                        n_halluc[c] += 1
+                    elif gt_c.any() and not pred_c.any():
+                        n_miss[c] += 1
+                    elif gt_c.any():          # both non-empty: a real distance
+                        metric_sums["hd95_clean"][c] += hd
+                        n_clean[c] += 1
                 sample_count += 1
     pbar.close()
 
@@ -571,6 +597,16 @@ def run_test(model, loaders, loss_fn, device, cfg, run_logger):
         f"| TC: Dice={dice_tc:.3f} HD95={hd95_tc:.2f} Sens={sens_tc:.3f} IoU={iou_tc:.3f} "
         f"| Mean: Dice={mean_dice:.3f} HD95={mean_hd95:.2f} Sens={mean_sens:.3f} IoU={mean_iou:.3f} mIoU={mean_iou:.3f}"
     )
+    hd95_clean = np.divide(metric_sums["hd95_clean"], n_clean,
+                           out=np.zeros(3), where=n_clean > 0).tolist()
+    print(
+        f"HD95 breakdown (n={sample_count}) | "
+        + " | ".join(
+            f"{name}: {n_halluc[c]} hallucinated + {n_miss[c]} missed "
+            f"(374.0 each), {hd95_clean[c]:.2f}mm over the {n_clean[c]} clean cases"
+            for c, name in enumerate(("TC", "WT", "ET"))
+        )
+    )
     print("Metric on test image: ", metric)
     print(f"metric_tc: {metric_tc:.4f}")
     print(f"metric_wt: {metric_wt:.4f}")
@@ -581,6 +617,12 @@ def run_test(model, loaders, loss_fn, device, cfg, run_logger):
         "hd95_tc": hd95_tc, "hd95_wt": hd95_wt, "hd95_et": hd95_et, "mean_hd95": mean_hd95,
         "sens_tc": sens_tc, "sens_wt": sens_wt, "sens_et": sens_et, "mean_sens": mean_sens,
         "iou_tc": iou_tc, "iou_wt": iou_wt, "iou_et": iou_et, "mean_iou": mean_iou,
+        "hd95_tc_clean": hd95_clean[0], "hd95_wt_clean": hd95_clean[1],
+        "hd95_et_clean": hd95_clean[2],
+        "n_halluc_tc": int(n_halluc[0]), "n_halluc_wt": int(n_halluc[1]),
+        "n_halluc_et": int(n_halluc[2]),
+        "n_miss_tc": int(n_miss[0]), "n_miss_wt": int(n_miss[1]),
+        "n_miss_et": int(n_miss[2]), "n_test": sample_count,
     }
     run_logger.write_test_metrics(test_row)
     return test_row
