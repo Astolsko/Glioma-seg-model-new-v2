@@ -1,0 +1,21 @@
+{
+  "sw_overlap": 0.5,
+  "sw_mode": "gaussian",
+  "tta_flips": true,
+  "thresholds": [
+    0.3,
+    0.3,
+    0.5
+  ],
+  "tune_thresholds_after_training": true,
+  "min_component_voxels": [
+    0,
+    0,
+    0
+  ],
+  "min_total_voxels": [
+    0,
+    0,
+    0
+  ]
+}

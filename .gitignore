@@ -13,3 +13,4 @@ __pycache__/
 *.safetensors
 
 # keep logs/ and results, but not the checkpoints they contain (matched above)
+data/
