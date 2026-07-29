@@ -22,6 +22,246 @@ CORRECT units, test pass with TTA + tuned thresholds + post-processing:
 - Test HD95 **excluding empty-mismatch patients**: 4.55 / 4.63 / **3.65**
 - 19.6 min/epoch (baseline: 42.0)
 
+> **Next up:** the native-1mm run. Code is built + verified on branch
+> `native-1mm-run` (NOT merged to main). See the handoff section directly below.
+
+---
+
+## NEXT SESSION — START HERE: launch / read the native-1mm run
+
+The native-1mm training run is **built, tested, and ready** but was **PENDING
+LAUNCH** at the end of Session 5 (user was reviewing the diff). Everything about
+*why* is in the Session-5 entry below; this section is the *operational* handoff.
+
+### 0. First, find out where things stand
+```bash
+cd "/DATA/Abul Hasan/Glioma Revision"
+git branch --show-current          # the 1mm code lives on `native-1mm-run`, not main
+git log --oneline -3               # was it committed?
+ls logs/                           # did the run get launched? look for run2-native-1mm/
+ps aux | grep train.py             # is it running right now?
+```
+- If `logs/run2-native-1mm/` exists with a growing `metrics.csv` → the run is
+  underway or done; skip to §2.
+- If not → launch it, §1.
+
+### 1. Launch (if not already running)
+```bash
+git checkout native-1mm-run        # IMPORTANT: the 1mm pipeline is only on this branch
+conda activate pytorch2
+pytest -q                          # expect 185 passed
+nohup python -u train.py --name run2-native-1mm > logs/run2-native-1mm.out 2>&1 &
+tail -f logs/run2-native-1mm.out   # watch the per-epoch table + run_eta
+```
+- ~30–40h, 50 epochs. One command does train → tune thresholds on val → test →
+  XAI(modality, uncertainty).
+- Outputs land in `logs/run2-native-1mm/`:
+  `checkpoints/best_metric_model.pth`, `metrics.csv` (per-epoch),
+  `testing/test_metrics.csv` (headline + n_halluc/n_miss/hd95_clean breakdown),
+  `eval/{threshold_sweep,infer_config}.json`, `xai/{modality,uncertainty}`,
+  `plots/`, `log.txt`, `config_snapshot.json`.
+
+### 2. When it finishes — read outputs in this order
+1. `testing/test_metrics.csv` — Dice/HD95 per channel + the `n_halluc_*`,
+   `n_miss_*`, `hd95_*_clean` columns (the honest HD95 breakdown).
+2. `eval/threshold_sweep.json` — the tuned thresholds. **Do NOT ship the ET
+   argmax blindly** — the val sweep is blind to hallucinations (Session-5
+   lesson). Re-run the ET knee ablation to pick the operating point:
+   `logs/run1-new-version/eval/et_operating_point_ablation.py` is the template
+   (point it at the new checkpoint; note `min_total` is now 352 at 1mm).
+3. `xai/modality.json` — ET must collapse without T1ce, WT without FLAIR (gate G6).
+4. `xai/uncertainty.json` — error-retention curve (gate G7).
+
+### 3. Decision gates for the 1mm results
+| Look at | If | Then |
+|---|---|---|
+| **mean Dice** vs run1's ~0.83 | much lower | **EXPECTED** — 1mm is the harder, honest problem. Compare 1mm-to-1mm ONLY, never to the resized runs. Not a regression. |
+| **ET sensitivity** vs run1's 0.72 | **up** | the Focal-Tversky-on-aux + native resolution recovered recall — the run did its job. |
+| ET sensitivity | still ≤ ~0.72 | recall is NOT fixable this way. Suspect the flat-ViT ceiling / label quality → plan §0.7.2 #1 (already at 1mm), #5 (block swap), or #2 (5-fold CV). |
+| `n_halluc_et` | high | raise `min_total` (now 352) OR ship a higher ET-threshold knee (§2.2). |
+| `hd95_et_clean` | ~3–4mm | boundaries fine, as on run1 — do NOT spend effort on boundary work. |
+| `xai/modality` | ET does NOT collapse without T1ce | model is right for the wrong reasons — investigate, don't bury (gate G6). |
+
+### 4. RESULTS — APPEND HERE (fill in after the run)
+```
+run2-native-1mm | 50 ep | <best ep> | <min/epoch> | <total h>
+Val  Dice  TC/WT/ET/mean : _ / _ / _ / _
+Test Dice  TC/WT/ET/mean : _ / _ / _ / _
+Test HD95  TC/WT/ET      : _ / _ / _   (clean ET: _ ; n_halluc/n_miss ET: _/_)
+Test Sens  TC/WT/ET      : _ / _ / _   (compare ET to run1's 0.72)
+Tuned thresholds (sweep) : _ / _ / _   | shipped ET knee: _
+XAI: ET drop w/o T1ce = _ ; WT drop w/o FLAIR = _ ; uncertainty retention: _
+Verdict vs run1 (recall recovered? boundaries? hallucinations?): _
+```
+
+### Decisions locked this session (context for whoever reads this)
+- **One more training run only** — it is this native-1mm run. `v1-run3`'s
+  checkpoint is gone, so the recall regression can never be isolated in a
+  controlled comparison; reason from the Phase-0/ET ablations, not A/B.
+- **Kept 128×128×96** (not 128³): empty top/bottom slices are removed by the
+  adaptive `CropForegroundd`, so patch depth does not change noise exposure —
+  96 is cheaper, memory-safe, and keeps `img_shape` unchanged (no transformer
+  positional-embedding change). **Dropped `RandBiasFieldd`.** CLAHE removed
+  (was already dead code).
+- **Aux heads: Dice + Focal-Tversky** (recall pressure); **Hausdorff stays
+  main-head only** (keeps the 2.14× speedup). ET boundaries are already good.
+- **Headline = Dice/HD95**; **XAI = modality + uncertainty only** (CAM/faithful
+  cut — the CAM support is the GT mask, a tautology, not a finding).
+- **The residual ET problem is recall/detection + presence-absence, NOT
+  boundaries** (ET clean HD95 = 3.10mm, best of the three). Mismatch floor on
+  run1 was 4 (≈3 hallucinated + 1 missed).
+- **Ship the ET-threshold KNEE, not the sweep argmax** (the sweep maximises
+  clean Dice, which is blind to the hallucinations that dominate ET HD95).
+- **Caveats that survive any result:** test split is n=70 (±0.03 ET is noise);
+  5-fold CV (plan §0.7.2 #2) is the first thing a reviewer will ask for.
+
+---
+
+## 2026-07-29 — Session 5: ran the pending eval; removed CLAHE; ET operating point mis-tuned
+
+Ran `evaluate.py --run run1-new-version --tag final --tune-thresholds` (the command
+Session 4 left pending) and removed CLAHE from the preprocessing pipeline. The
+eval settles the one open question from Session 4 (gate G2) and surfaces a new,
+cheap inference fix.
+
+**CLAHE removed — behavior-neutral.** `ApplyCLAHEAndZscored` only ever called
+`zscore_normalize`; `apply_clahe_to_volume` was already dead code (defined, never
+invoked). Deleted the dead function + its `skimage` import + its tests, renamed
+the transform `ApplyCLAHEAndZscored -> ZScoreNormalized`, added an honest
+docstring. Runtime preprocessing is unchanged (per-channel z-score over the brain
+mask), so the run1 checkpoint and this eval stay valid. `pytest` green (189, then
+33 on the two touched files).
+
+**THE FINDING — the val threshold sweep drove ET to a WORSE operating point.**
+With the both-empty bug fixed (empty-GT patients skipped) and the grid extended to
+0.05, the sweep picked **TC=0.10, WT=0.10, ET=0.05** (was 0.3/0.3/0.5 published).
+The ET sweep is now monotone-decreasing and pinned at the 0.05 floor. But ET Dice
+with `ignore_empty` is blind to presence/absence, so it happily minimises the
+threshold — and a lower threshold makes MORE ET-negative patients emit stray FP
+voxels that clear `min_total=100`. Net effect on the test pass:
+
+| ET operating point | ET Dice | ET HD95 | mismatches | ET HD95 clean |
+|---|---|---|---|---|
+| published (thr 0.5, pp on) | 0.753 | 24.50 | 4 | 3.65 |
+| **final (thr 0.05, pp on)** | **0.758** | **34.71** | **5 halluc + 1 miss** | **3.10** |
+
+Lowering ET 0.5->0.05 bought **+0.005 Dice and cost +10.2mm HD95**. The buggy
+sweep's ET=0.5 was, by luck, the better HD95 point. Verified exact:
+`6*374 + 60*3.0998 = 2430.0 / 70 = 34.714`, matching to 3 d.p.
+
+**Full `final` test pass (thr 0.1/0.1/0.05, TTA, pp min_comp=(0,0,50) min_total=(0,0,100)):**
+
+| | TC | WT | ET | Mean |
+|---|---|---|---|---|
+| Dice | 0.852 | 0.892 | **0.758** | 0.834 |
+| HD95 (mm) | 4.59 | 4.62 | **34.71** | 14.64 |
+| HD95 clean | 4.59 | 4.62 | **3.10** | — |
+| Sens | 0.874 | 0.909 | **0.723** | 0.835 |
+| IoU | 0.758 | 0.809 | 0.548 | 0.705 |
+
+TC/WT have **zero** empty-mismatch (their HD95 == HD95-clean). ET clean boundary
+**3.10mm is the best of the three** — reconfirms Session 4: ET geometry is fine,
+the residual ET defect is presence/absence + recall (sens 0.723), NOT boundaries.
+
+**Session-4 predictions, scored:**
+1. "~3 halluc + 1 miss" -> **5 halluc + 1 miss.** Direction right (overwhelmingly
+   hallucinated), count off. **Gate G2 resolved: hallucinations dominate -> RAISE
+   `min_total_voxels`.** The "maybe it's misses, lower it" branch is closed.
+2. "ET threshold moves off 0.5" -> **confirmed, to 0.05**; the +0.017 spike at
+   exactly 0.50 vanished. The both-empty bug alone picked the published 0.5.
+3. "TC/WT slide to the 0.05 floor" -> **partially wrong.** Both landed at **0.10**
+   with a shallow interior peak (they DECREASE from 0.10 down to 0.05). TC/WT are
+   better calibrated than "pinned at floor" implied; only ET wants the floor.
+
+**Two cheap, no-retrain levers this exposes (NOT training-side):**
+- **Raise ET `min_total_voxels`** (100 -> ~150-200 in 1.875mm-voxel space) to kill
+  more of the 5 hallucinations. One `evaluate.py` pass, re-runnable.
+- **Don't blindly ship the sweep's ET threshold.** The sweep optimises clean Dice,
+  which is blind to the hallucination count that dominates ET HD95. A sensible ET
+  point trades a hair of clean Dice for far fewer 374.0 sentinels — the sweep
+  cannot see that trade. (Its own docstring already warns of exactly this.)
+
+Note both levers get **re-derived in 1mm space anyway** (voxel size changes, so
+`min_total` must be rescaled), so they matter mainly as postproc settings to carry
+into the 1mm run, not as work to finalise on the soon-superseded 1.875mm protocol.
+
+**ET operating-point ablation (no retrain, `eval/et_operating_point_ablation.{txt,py}`).**
+Cached the test-set predictions once (logits are identical across settings) and
+swept ET threshold x (min_component, min_total), TC/WT fixed at 0.10. Script
+validated: it reproduces `run_test` exactly on two anchors — the `final` point
+(0.05/50/100 -> ET 0.7575/34.71, 5h+1m) and the published point (0.50/50/100 ->
+ET 0.7529/24.50, 3h+1m).
+
+- **Winner: ET threshold 0.20, min_comp 50, min_total 100.** mean Dice **0.8341**,
+  mean HD95 **11.11** (down from `final`'s 14.64, and below published 11.24); ET
+  0.7582 / 24.13mm / **3 halluc + 1 miss**. Highest ET Dice of any low-HD95 row
+  AND the simplest change — just don't ship the sweep's 0.05.
+- **Threshold is a cleaner lever than `min_total`.** Raising thr 0.05->0.20 drops
+  hallucinations 5->3 with NO new misses (real ET has high-confidence voxels well
+  above 0.20). Raising `min_total` instead (0.05/300) also cuts hallucinations but
+  zeroes 2 real small-ET patients (miss 1->2, ET Dice 0.7575->0.7447). So prefer
+  the threshold knee; keep `min_total` modest.
+- **0.20 is the knee:** below it (0.10, 0.05) hallucinations jump to 5; at/above it
+  they hold at 3 while ET Dice falls monotonically to 0.7529 at 0.50.
+- **The mismatch floor is 4** on this checkpoint (3h+1m or 2h+2m — trading one for
+  the other, never fewer). The 1 miss is a genuine detection failure (ET stays
+  empty even at thr 0.05); the ~3 hallucinations are substantial FP blobs. That
+  residual == the recall regression, and it is exactly what the 1mm run +
+  Focal-Tversky-on-aux targets. No inference knob removes it.
+
+**Lesson carried into the 1mm run:** after tuning, ship the ET-threshold KNEE (the
+lowest threshold that holds the hallucination floor), not the sweep's raw argmax;
+keep `min_total` modest (rescaled for 1mm voxels).
+
+### Native-1mm run — BUILT + smoke-tested, PENDING LAUNCH (branch `native-1mm-run`)
+
+Implemented the one-more-run change-list. NOT launched — user reviews the diff
+first. Design forks the user picked: **keep 128x128x96** patches (not 128^3 — 96
+was cheaper/proven and, crucially, the empty top/bottom slices are removed by the
+adaptive `CropForegroundd`, not by patch depth, so 128 vs 96 does not change
+empty-slice exposure); **drop `RandBiasFieldd`** entirely.
+
+Because `img_shape` STAYS (128,128,96), the transformer positional-embedding
+landmine (journal §2 #2) does NOT apply — no model-geometry change at all.
+
+Changes:
+- **transforms.py** — native 1mm. Train: `CropForegroundd` (adaptive brain bbox
+  on raw intensities) -> `ZScoreNormalized` (whole-brain) -> `SpatialPadd` to the
+  patch size -> `RandCropByPosNegLabeld(pos=2,neg=1,num_samples=2)` on the
+  single-channel integer label -> multi-channel split -> flips/affine/intensity.
+  `Resized`/`CropRawDepthd` gone from the pipeline (classes kept for the tool +
+  tests). Val/test: `CropForegroundd` + whole foreground-cropped brain through
+  sliding window (no crop imposed).
+- **config.py** — `voxel_spacing=(1,1,1)` hard-coded (honest by construction, no
+  derivation); `cfg.crop` = {fg_threshold, pos, neg, num_samples}; `min_component`/
+  `min_total` rescaled 3.52x to (0,0,176)/(0,0,352) to hold the same PHYSICAL
+  cleanup at 1mm; `xai.components=["modality","uncertainty"]`; thresholds default
+  (0.5,0.5,0.5) (re-tuned at end of run — ship the KNEE).
+- **losses.py** — aux heads now Dice + Focal-Tversky via `CombinedLoss.aux_loss`
+  (Hausdorff still off aux, so the 2.14x speedup is kept). `combine_main_and_aux`
+  switched from `.dice` to `.aux_loss`; plain-callable fallback preserved.
+- **dataloader.py** — `list_data_collate` on the train loader (RandCrop returns a
+  list of num_samples); `build_dataloaders` shape-print handles the list.
+- **tests** — updated config (crop/spacing), losses (2 new aux tests), transforms
+  (new native-1mm integration test); removed the CLAHE/fixed-depth tests.
+
+Verification: `pytest` **185 passed**; real-data smoke test (2 train steps + 2 val
+volumes) — collation OK, forward+backward finite, **peak GPU 21.6 GB / 48** (no
+OOM), val volumes foreground-cropped to ~(130,171,141) at native 1mm, sliding
+window + metrics run. The smoke test caught one real bug pytest could not reach
+(`train_ds[0]` is now a list) — fixed.
+
+Epochs to set at launch: **50** (journal measured +0.009 mean-Dice for the 2nd 50).
+`train.py` then auto-runs tune-thresholds -> test -> XAI(modality,uncertainty).
+Cost est. ~30-40h (128x128x96 is ~1.78x cheaper attention than 128^3; sliding-
+window val over full 1mm volumes is the real per-epoch cost).
+
+**Files:** `utils/dataloader.py` (dropped `apply_clahe_to_volume` + `skimage`
+import, renamed transform, fixed stale comment), `utils/transforms.py` (import +
+2 call sites), `tests/test_dataloader.py` + `tests/test_transforms.py` (dropped
+CLAHE tests, renamed). New eval artifacts in `logs/run1-new-version/eval/`:
+`test_metrics_final.csv`, `threshold_sweep_final.json`, `infer_config_final.json`.
+
 ---
 
 ## 2026-07-29 — Session 4: read the Tier-B run; ET diagnosis overturned
@@ -150,28 +390,25 @@ shrinkage is real and larger than expected; every val Dice ever reported (all at
 
 ---
 
-## NEXT SESSION — start here
+## Session-4 handoff (HISTORICAL — superseded by the "NEXT SESSION" section at the top)
 
-### 1. A command was left running. Read its output first.
+### 1. A command was left running. Read its output first. — DONE (Session 5)
 
 ```bash
-pytest -q
-python evaluate.py --run run1-new-version --tag final --tune-thresholds   # ~1h
+pytest -q                                                                # green (189)
+python evaluate.py --run run1-new-version --tag final --tune-thresholds   # ran, ~1h
 ```
 
-Outputs: `logs/run1-new-version/eval/test_metrics_final.csv`,
-`eval/threshold_sweep_final.json`, and an `HD95 breakdown ...` line in stdout.
-If it was not run, run it — it is the last cheap information available.
+Outputs written to `logs/run1-new-version/eval/`: `test_metrics_final.csv`,
+`threshold_sweep_final.json`, `infer_config_final.json`. **See the Session-5
+entry above for the analysis.** Table below records what each row actually fired:
 
-**What to look for, and what each answer changes:**
-
-| Look at | If | Then |
+| Look at | Predicted | ACTUAL (Session 5) |
 |---|---|---|
-| `n_halluc_et` vs `n_miss_et` | mostly **hallucinated** | the model invents ET on ET-negative patients. RAISE `min_total_voxels`. Predicted: ~3 halluc + ~1 miss |
-| same | mostly **missed** | `min_total=100` is deleting real ET. LOWER it. This is the OPPOSITE of plan.md gate G2's assumption — G2 is written on the old, wrong diagnosis |
-| `hd95_et_clean` | still ~3.6mm | confirms ET boundaries are fine; do NOT spend the 1mm run on boundary work |
-| ET best threshold | no longer 0.5 | confirms the both-empty bug was what picked it. Expect it to move below 0.5 |
-| TC/WT best threshold | pinned at 0.05 again | calibration is worse still; note it, do not chase it — the 1mm run re-tunes anyway |
+| `n_halluc_et` vs `n_miss_et` | ~3 halluc + ~1 miss | **5 halluc + 1 miss** — hallucinations dominate. **RAISE `min_total_voxels`.** Gate G2's raise-direction CONFIRMED |
+| `hd95_et_clean` | still ~3.6mm | **3.10mm** — even better; ET boundaries fine, no boundary work in the 1mm run |
+| ET best threshold | below 0.5 | **0.05** (floor); the 0.50 spike vanished. But 0.05 is a WORSE HD95 point than the old 0.5 (more hallucinations) — the sweep can't see that |
+| TC/WT best threshold | pinned at 0.05 | **0.10** — shallow interior peak, not pinned. Better calibrated than expected |
 
 ### 2. Then design the single 1mm run. Change list, and nothing beyond it.
 

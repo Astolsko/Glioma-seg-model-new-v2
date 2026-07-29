@@ -6,12 +6,14 @@ from monai.transforms import (
     Orientationd,
     Resized,
     Spacingd,
+    CropForegroundd,
+    SpatialPadd,
+    RandCropByPosNegLabeld,
     EnsureTyped,
     EnsureChannelFirstd,
     ToTensord,
     RandFlipd,
     RandAffined,
-    RandBiasFieldd,
     RandScaleIntensityd,
     RandShiftIntensityd,
     RandGaussianNoised,
@@ -19,7 +21,7 @@ from monai.transforms import (
     RandGaussianSmoothd,
 )
 
-from utils.dataloader import ConvertToMultiChannelBasedOnBratsClassesd, ApplyCLAHEAndZscored
+from utils.dataloader import ConvertToMultiChannelBasedOnBratsClassesd, ZScoreNormalized
 
 
 class CropRawDepthd(MapTransform):
@@ -132,7 +134,11 @@ class CropForegroundHWd(MapTransform):
 
 
 def build_resize(cfg):
-    """Resize H/W down to img_shape — depth is already exact by the time this
+    """LEGACY (resized pipeline). No longer used by build_train/val_transform —
+    the native-1mm pipeline (Session 5) keeps full resolution and never resizes
+    in plane. Retained as the resized-pipeline reference and for the tests.
+
+    Resize H/W down to img_shape — depth is already exact by the time this
     runs (see CropRawDepthd), so this only touches the in-plane axes.
 
     `mode` is PER KEY here. It used to be a single mode="nearest" covering both
@@ -155,6 +161,9 @@ def build_resize(cfg):
 
 
 def build_train_transform(cfg):
+    """Native 1mm training pipeline. No Resized downsample and no fixed depth
+    window: the brain is foreground-cropped (adaptive), z-scored over the whole
+    brain, then 128x128x96 patches are drawn centred on tumour."""
     return Compose([
         LoadImaged(keys=["image", "label"]),
         EnsureChannelFirstd(keys=["image", "label"]),
@@ -164,23 +173,39 @@ def build_train_transform(cfg):
             pixdim=(1.0, 1.0, 1.0),
             mode=("bilinear", "nearest"),
         ),
-        CropRawDepthd(
-            keys=["image", "label"],
-            start_slice=cfg.crop.train_start_slice,
-            num_slices=cfg.unetr.img_shape[-1],
+        # Adaptive brain crop on RAW intensities (before z-score): removes the
+        # near-empty top/bottom slices per patient — what the old fixed
+        # [40:136) window was hand-tuned to drop, but it can never clip a brain
+        # that sits outside a fixed guess.
+        CropForegroundd(
+            keys=["image", "label"], source_key="image",
+            select_fn=lambda x: x > cfg.crop.fg_threshold,
+            allow_smaller=False,
         ),
-        build_resize(cfg),
+        ZScoreNormalized(keys="image"),   # per-channel z-score over the whole brain
+        # ZScoreNormalized returns a numpy "image"; force "label" to numpy too so
+        # the pos/neg crop sees one array type. Convert-to-multichannel runs
+        # AFTER the crop, so the crop's foreground is the single-channel integer
+        # label > 0 (= whole tumour), which is what RandCropByPosNegLabeld wants.
+        EnsureTyped(keys=["image", "label"], data_type="numpy"),
+        # Guarantee every axis is at least the patch size BEFORE cropping, so a
+        # thin foreground-cropped brain can never yield a smaller-than-96 patch
+        # — UNETR's positional embedding needs EXACTLY cfg.unetr.img_shape.
+        # Pads with 0 (= background for both z-scored image and integer label).
+        SpatialPadd(keys=["image", "label"], spatial_size=cfg.unetr.img_shape),
+        RandCropByPosNegLabeld(
+            keys=["image", "label"], label_key="label",
+            spatial_size=cfg.unetr.img_shape,
+            pos=cfg.crop.pos, neg=cfg.crop.neg,
+            num_samples=cfg.crop.num_samples,
+        ),
         ConvertToMultiChannelBasedOnBratsClassesd(keys="label"),
-        CropForegroundHWd(keys=["image", "label"], threshold=cfg.crop.threshold),
-        ApplyCLAHEAndZscored(keys="image"),
 
         # spatial — both image and label.
         # RandRotate90 (max_k=3) used to sit here. A brain never appears
         # rotated 90/180/270 degrees in an RAS-oriented scan, so it spent
-        # augmentation budget teaching invariance to poses that do not occur,
-        # and after the foreground crop it swapped a non-square H/W before
-        # fit_to_size padded the result back. Small-angle affine is the
-        # realistic version of the same idea.
+        # augmentation budget teaching invariance to poses that do not occur.
+        # Small-angle affine is the realistic version of the same idea.
         RandFlipd(keys=["image", "label"], prob=0.5, spatial_axis=0),
         RandFlipd(keys=["image", "label"], prob=0.5, spatial_axis=1),
         RandFlipd(keys=["image", "label"], prob=0.5, spatial_axis=2),
@@ -200,10 +225,10 @@ def build_train_transform(cfg):
             sigma_x=(0.5, 1.0), sigma_y=(0.5, 1.0), sigma_z=(0.5, 1.0)
         ),
         RandAdjustContrastd(keys="image", prob=0.3, gamma=(0.7, 1.3)),
-        # Smooth multiplicative intensity drift — simulates the scanner
-        # inhomogeneity that survives N4 correction, and is the main
-        # cross-scanner nuisance for T1ce enhancement.
-        RandBiasFieldd(keys="image", prob=0.3, degree=3, coeff_range=(0.0, 0.1)),
+        # RandBiasFieldd was dropped (Session 5): it perturbs exactly the T1ce
+        # enhancement contrast ET is defined by, and it had been running AFTER
+        # z-score — a multiplicative field on signed, zero-centred data, which
+        # is not a bias field at all.
 
         EnsureTyped(keys=["image", "label"]),
         ToTensord(keys=["image", "label"]),
@@ -211,8 +236,10 @@ def build_train_transform(cfg):
 
 
 def build_val_transform(cfg):
-    """Shared by validation AND test so both splits see identical
-    preprocessing (crop-based, no augmentation)."""
+    """Shared by validation AND test so both splits see identical preprocessing
+    (no augmentation). Native 1mm: the whole foreground-cropped brain is passed
+    through — sliding-window inference (roi_size = cfg.unetr.img_shape) does the
+    patching at eval time, so no crop window is imposed here."""
     return Compose([
         LoadImaged(keys=["image", "label"]),
         EnsureChannelFirstd(keys=["image", "label"]),
@@ -222,15 +249,13 @@ def build_val_transform(cfg):
             pixdim=(1.0, 1.0, 1.0),
             mode=("bilinear", "nearest"),
         ),
-        CropRawDepthd(
-            keys=["image", "label"],
-            start_slice=cfg.crop.val_start_slice,
-            num_slices=cfg.unetr.img_shape[-1],
+        CropForegroundd(
+            keys=["image", "label"], source_key="image",
+            select_fn=lambda x: x > cfg.crop.fg_threshold,
+            allow_smaller=False,
         ),
-        build_resize(cfg),
+        ZScoreNormalized(keys="image"),
         ConvertToMultiChannelBasedOnBratsClassesd(keys="label"),
-        CropForegroundHWd(keys=["image", "label"], threshold=cfg.crop.threshold),
-        ApplyCLAHEAndZscored(keys="image"),
         EnsureTyped(keys=["image", "label"]),
         ToTensord(keys=["image", "label"]),
     ])

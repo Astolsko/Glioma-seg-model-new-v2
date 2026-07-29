@@ -9,7 +9,7 @@ import pytest
 
 pytest.importorskip("monai")
 
-from utils.dataloader import load_datalist, apply_clahe_to_volume, zscore_normalize, BratsDataset
+from utils.dataloader import load_datalist, zscore_normalize, BratsDataset
 
 
 # ---------------------------------------------------------------------------
@@ -52,53 +52,6 @@ def test_load_datalist_empty_dir_returns_empty_list(tmp_path):
     empty_root = tmp_path / "empty"
     empty_root.mkdir()
     assert load_datalist(str(empty_root)) == []
-
-
-# ---------------------------------------------------------------------------
-# apply_clahe_to_volume
-# ---------------------------------------------------------------------------
-
-def test_apply_clahe_preserves_shape_and_dtype():
-    volume = np.random.rand(6, 20, 20).astype(np.float32) * 500
-    out = apply_clahe_to_volume(volume)
-    assert out.shape == volume.shape
-    assert out.dtype == np.float32
-    assert np.isfinite(out).all()
-
-
-def test_apply_clahe_keeps_background_exactly_zero():
-    volume = np.zeros((4, 16, 16), dtype=np.float32)
-    volume[:, 4:12, 4:12] = np.random.rand(4, 8, 8).astype(np.float32) * 300 + 50
-    out = apply_clahe_to_volume(volume)
-    background_mask = volume <= 1e-5
-    assert np.all(out[background_mask] == 0.0)
-
-
-def test_apply_clahe_constant_volume_returns_as_is():
-    volume = np.full((3, 10, 10), 42.0, dtype=np.float32)
-    out = apply_clahe_to_volume(volume)
-    np.testing.assert_array_equal(out, volume.astype(np.float32))
-
-
-def test_apply_clahe_mostly_empty_slice_skips_clahe_but_still_normalizes():
-    # brain_mask covers 2% of the slice -> under the 5% per-slice CLAHE
-    # threshold, so CLAHE itself is skipped. Note the volume-wide p1/p99
-    # clip + min-max normalization runs BEFORE that per-slice check, so the
-    # "skip" path preserves the *normalized* value (0 or 1 here), not the
-    # raw input value (100.0) — 8/400=2% is enough to survive the p99 clip
-    # (which would otherwise crush a rarer outlier back to ~0).
-    volume = np.zeros((1, 20, 20), dtype=np.float32)
-    volume.flat[:8] = 100.0
-    out = apply_clahe_to_volume(volume)
-    assert out.flat[0] == pytest.approx(1.0)
-    assert out.flat[8] == pytest.approx(0.0)
-    assert np.all(out[0][1:, 1:] == 0.0)
-
-
-def test_apply_clahe_all_nonfinite_returns_zeros_like():
-    volume = np.full((2, 5, 5), np.nan, dtype=np.float32)
-    out = apply_clahe_to_volume(volume)
-    assert out.shape == volume.shape
 
 
 # ---------------------------------------------------------------------------

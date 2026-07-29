@@ -17,7 +17,7 @@ cfg.paths.logs_dir = "logs"
 # ---------------------------------------------------------------------------
 # Training
 # ---------------------------------------------------------------------------
-cfg.epoch = 100
+cfg.epoch = 50   # 50->100 bought only +0.009 mean Dice for ~16h on the resized run
 cfg.learning_rate = 1e-4
 cfg.weight_decay = 1e-4
 cfg.patience = 50
@@ -50,30 +50,29 @@ cfg.data.num_workers_train = 4
 cfg.data.num_workers_val = 4
 cfg.data.num_workers_test = 0
 
-# Depth cropping now happens on the RAW scan (right after Orientation+
-# Spacing, BEFORE Resized) using absolute raw slice indices — NOT on the
-# post-resize volume. This dataset is co-registered (every patient is
-# exactly 240x240x155 at 1mm spacing), so a fixed raw-slice window means the
-# same physical anatomical range for every patient.
+# NATIVE 1mm pipeline (Session 5+). The scans are kept at their native 1mm
+# 240x240x155 grid — NO Resized downsample, NO fixed depth window. Instead:
+#   * CropForegroundd crops every split to the brain's foreground bounding box
+#     (adaptive per patient), which removes the near-empty top/bottom slices
+#     the old fixed [40:136) window was hand-picked to drop — but adaptively,
+#     so it can never clip a brain that sits outside a fixed guess (finding D).
+#   * Training samples 128x128x96 patches with RandCropByPosNegLabeld, centred
+#     on tumour with probability pos/(pos+neg); val/test feed the whole
+#     foreground-cropped volume through sliding-window inference (roi_size =
+#     cfg.unetr.img_shape), so no crop window is imposed at eval.
 #
-# *_start_slice is the only number you set — the window always keeps
-# exactly cfg.unetr.img_shape[-1] slices (so end_slice = start_slice +
-# cfg.unetr.img_shape[-1], computed automatically in
-# utils/transforms.py:CropRawDepthd). That guarantees Resized's depth
-# resize is a true no-op (input depth == output depth == img_shape[-1]),
-# i.e. no nearest-neighbor slice-dropping — instead of compressing the
-# whole 155-slice scan down to img_shape[-1] slices and then cropping a
-# window out of THAT lossy result (the old behavior), we crop the raw scan
-# first and only resize H/W afterward.
-#
-# PLACEHOLDER VALUES — pick real ones with tools/crop_visual_check.py
-# (it loads one raw sample, applies this exact crop, and dumps every slice
-# before/after to PNG so you can see whether the window is cutting off
-# brain/tumor at either end).
+# fg_threshold: a voxel counts as brain (foreground) if any modality's RAW
+# intensity exceeds this. BraTS background is exactly 0, so 0 is the natural
+# cut; CropForegroundd runs BEFORE z-score, on raw intensities.
 cfg.crop = EasyDict()
-cfg.crop.train_start_slice = 40
-cfg.crop.val_start_slice = 40
-cfg.crop.threshold = 0.25
+cfg.crop.fg_threshold = 0
+# RandCropByPosNegLabeld: tumour-centred vs random crop ratio, and how many
+# crops to draw per volume per step. num_samples>1 multiplies the effective
+# batch (each crop is a training example), so it needs list_data_collate on the
+# train loader (wired in utils/dataloader.py).
+cfg.crop.pos = 2
+cfg.crop.neg = 1
+cfg.crop.num_samples = 2
 
 # ---------------------------------------------------------------------------
 # UNETR model
@@ -111,23 +110,16 @@ cfg.metrics = EasyDict()
 
 # TRUE physical spacing of the volumes the metrics actually see, in mm.
 #
-# Spacingd resamples to 1mm, which for BraTS is the native 240x240x155 grid.
-# CropRawDepthd then fixes depth to exactly img_shape[-1] slices, so Resized's
-# depth resize is a no-op and depth stays 1mm/voxel. H and W, however, get
-# squeezed 240 -> img_shape[0:2] by that same Resized, so one in-plane voxel
-# spans 240/128 = 1.875mm.
+# Native 1mm pipeline: Spacingd resamples to 1mm and NOTHING downsamples in
+# plane afterwards (Resized is gone), so every voxel the metrics see is a real
+# 1mm^3 voxel. Hard-coded (1,1,1), honest by construction rather than by
+# correction — no derivation to get wrong. Only HD95 reads this; Dice, IoU,
+# mIoU, sensitivity, specificity, F1 and AUC are voxel-counting metrics.
 #
-# This used to be hardcoded (1,1,1), which understated every in-plane HD95 by
-# 1.875x — the reported "mm" were not mm. Only HD95 reads this value: Dice,
-# IoU, mIoU, sensitivity, specificity, F1 and AUC are all voxel-counting
-# metrics and are unchanged by the correction. Expect HD95 to go UP after this
-# fix; that is the honest number, not a regression.
-cfg.metrics.raw_inplane_size = 240   # BraTS in-plane extent at 1mm, post-Spacingd
-cfg.metrics.voxel_spacing = (
-    cfg.metrics.raw_inplane_size / cfg.unetr.img_shape[0],
-    cfg.metrics.raw_inplane_size / cfg.unetr.img_shape[1],
-    1.0,
-)
+# (Historical: under the old resized pipeline this was 240/img_shape = 1.875mm
+# in plane. Native-1mm HD95 numbers are therefore NOT comparable to the resized
+# runs — they are measured on the harder, full-resolution problem.)
+cfg.metrics.voxel_spacing = (1.0, 1.0, 1.0)
 cfg.metrics.auc_every_n_epochs = 10
 
 # ---------------------------------------------------------------------------
@@ -150,12 +142,15 @@ cfg.infer.tta_flips = True
 # model is perfectly calibrated per class, which a recall-weighted loss makes
 # unlikely. Tune with: python evaluate.py --run <name> --tune-thresholds
 #
-# These are run1-new-version's tuned values, promoted from its
-# eval/threshold_sweep.json. They are the default so that an ablation like
-# `evaluate.py --no-postprocess` changes ONE thing versus that run's published
-# testing/test_metrics.csv — with the old (0.5, 0.5, 0.5) default it would have
-# silently changed the thresholds too, and the comparison would mean nothing.
-cfg.infer.thresholds = (0.3, 0.3, 0.5)
+# Fresh 1mm run: this is only the pre-tune default (tune_thresholds_after_
+# training re-derives it on val at the end of the run). LESSON from the
+# run1-new-version ET ablation (eval/et_operating_point_ablation.txt): the val
+# sweep maximises clean-case Dice, which is blind to the hallucination count
+# that dominates ET HD95, so it drives the ET threshold to the grid floor and
+# INFLATES HD95. When promoting the tuned thresholds, ship the ET-threshold
+# KNEE (the lowest threshold that still holds the hallucination floor), not the
+# sweep's raw argmax.
+cfg.infer.thresholds = (0.5, 0.5, 0.5)
 
 # Search the thresholds above on the VAL split at the end of training, before
 # the test pass runs. Tuning on val and reporting on test is the whole point —
@@ -171,19 +166,18 @@ cfg.infer.tune_thresholds_after_training = True
 # The second rule is the one that matters for ET: compute_hd95 returns the
 # 374.0 penalty whenever exactly one of {prediction, ground truth} is empty,
 # so a handful of stray FP voxels on an ET-negative patient costs more HD95
-# than every correctly segmented patient combined. One in-plane voxel is
-# 1.875 x 1.875 x 1.0 mm = 3.5mm^3, so 50 voxels is ~176mm^3.
+# than every correctly segmented patient combined.
 #
-# These are VOXEL counts, and the voxel is not a fixed size. Moving to native
-# 1mm training makes one voxel 1mm^3 instead of 3.5mm^3, so the same numbers
-# would silently become a 3.5x WEAKER cleanup — rescale to (0, 0, 176) and
-# (0, 0, 352) at that point, or derive both from mm^3 and cfg.metrics.voxel_spacing.
-#
-# Measured on run1-new-version (evaluate.py --tag nopp --no-postprocess):
-# this cleanup costs 0.011 ET Dice and buys 10.1mm ET HD95. Net positive,
-# but the min_total rule is all-or-nothing and is what creates Dice-0 patients.
-cfg.infer.min_component_voxels = (0, 0, 50)
-cfg.infer.min_total_voxels = (0, 0, 100)
+# RESCALED for native 1mm: a voxel is now 1mm^3 (was 1.875 x 1.875 x 1.0 =
+# 3.52mm^3 under the resized pipeline). To keep the SAME PHYSICAL cleanup as
+# run1-new-version's (0,0,50)/(0,0,100) — i.e. ~176mm^3 / ~352mm^3 — the voxel
+# counts scale by 3.52x: (0,0,176) and (0,0,352). The ET ablation found the
+# probability threshold is the cleaner lever anyway (it removes FP scatter
+# without zeroing real small-ET patients), so keep min_total at this modest
+# physical volume and tune ET recall via the threshold knee, not by inflating
+# this floor.
+cfg.infer.min_component_voxels = (0, 0, 176)
+cfg.infer.min_total_voxels = (0, 0, 352)
 
 # ---------------------------------------------------------------------------
 # Attention overlay visualization
@@ -210,7 +204,13 @@ cfg.xai = EasyDict()
 # ~45h run. A failing component is caught and logged, never allowed to discard
 # a finished training run. Set False to skip and use xai.py separately.
 cfg.xai.run_after_training = True
-cfg.xai.components = ["cam", "modality", "uncertainty", "rollout", "faithful"]
+# Only the two defensible components (Session 4). "cam"/"faithful" are cut: the
+# CAM is taken one 1x1 conv from the output, so its support IS the GT mask
+# (mass_in_tumor = 0.9999999) and the randomisation SSIM cannot move — the
+# faithfulness suite is measuring a tautology, not the model. Dropping
+# "faithful" also removes a weight-randomising step from the end of the run.
+# "rollout" goes with them (heatmap-only, not load-bearing without X5).
+cfg.xai.components = ["modality", "uncertainty"]
 
 # Test-set samples to explain. Keep small: every extra sample multiplies the
 # faithfulness sweeps.

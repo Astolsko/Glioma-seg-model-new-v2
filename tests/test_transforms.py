@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("monai")
 
-from utils.transforms import CropRawDepthd, CropForegroundHWd, ApplyCLAHEAndZscored, fit_to_size
+from utils.transforms import CropRawDepthd, CropForegroundHWd, ZScoreNormalized, fit_to_size
 from utils.dataloader import ConvertToMultiChannelBasedOnBratsClassesd
 
 
@@ -161,34 +161,39 @@ def test_foreground_bbox_raises_on_all_background_image():
 
 
 # ---------------------------------------------------------------------------
-# Full pipeline integration — confirms the "no compression" design goal:
-# the raw-depth crop runs before Resized, so Resized's depth resize should
-# be an exact no-op and the final depth should always be exactly
-# cfg.unetr.img_shape[-1], regardless of the raw scan's original depth.
+# Full pipeline integration (native 1mm): training draws exact-patch crops
+# (SpatialPadd guarantees the patch size even for a small volume), while
+# val/test keep the whole foreground-cropped brain for sliding-window
+# inference. This is the shape contract the model and the run depend on.
 # ---------------------------------------------------------------------------
 
-def test_full_pipeline_keeps_exact_target_depth_no_compression(make_nii_patient):
+def test_native_1mm_pipeline_train_patches_and_full_val(make_nii_patient):
     from config import cfg
     from utils.transforms import build_train_transform, build_val_transform
 
-    target_depth = cfg.unetr.img_shape[-1]
-    needed_min_depth = max(cfg.crop.train_start_slice, cfg.crop.val_start_slice) + target_depth
-    raw_depth = needed_min_depth + 10
-    hw = raw_depth + 20  # keep H/W strictly larger than D, matching real BraTS proportions
-
-    patient_dir = make_nii_patient(patient_id="IntegrationPatient", shape=(hw, hw + 5, raw_depth))
+    patch = tuple(cfg.unetr.img_shape)  # (128, 128, 96)
+    # A raw volume SMALLER than the patch on purpose: exercises the
+    # SpatialPadd -> exact-patch-crop path so a thin brain can't shrink a patch.
+    patient_dir = make_nii_patient(patient_id="IntegrationPatient", shape=(40, 44, 30))
     entry = {
         "image": [f"{patient_dir}/IntegrationPatient_{m}.nii" for m in ("flair", "t1", "t1ce", "t2")],
         "label": f"{patient_dir}/IntegrationPatient_seg.nii",
     }
 
+    # train: RandCropByPosNegLabeld returns a LIST of num_samples crops, each
+    # exactly the patch size — image 4ch, label 3ch (post multi-channel split).
     train_out = build_train_transform(cfg)(dict(entry))
-    assert train_out["image"].shape[-1] == target_depth
-    assert train_out["label"].shape[-1] == target_depth
+    assert isinstance(train_out, list) and len(train_out) == cfg.crop.num_samples
+    for sample in train_out:
+        assert tuple(sample["image"].shape) == (4, *patch)
+        assert tuple(sample["label"].shape) == (3, *patch)
 
+    # val: one whole foreground-cropped brain (no patch crop); image 4ch,
+    # label 3ch, and the two must share spatial dims.
     val_out = build_val_transform(cfg)(dict(entry))
-    assert val_out["image"].shape[-1] == target_depth
-    assert val_out["label"].shape[-1] == target_depth
+    assert val_out["image"].shape[0] == 4
+    assert val_out["label"].shape[0] == 3
+    assert tuple(val_out["image"].shape[1:]) == tuple(val_out["label"].shape[1:])
 
 
 # ---------------------------------------------------------------------------
@@ -220,21 +225,21 @@ def test_convert_brats_labels_squeezes_leading_channel_dim():
 
 
 # ---------------------------------------------------------------------------
-# ApplyCLAHEAndZscored
+# ZScoreNormalized
 # ---------------------------------------------------------------------------
 
-def test_apply_clahe_and_zscored_preserves_shape_for_4d_image():
+def test_zscore_normalized_preserves_shape_for_4d_image():
     image = np.random.rand(4, 6, 6, 5).astype(np.float32) * 100
-    transform = ApplyCLAHEAndZscored(keys=["image"])
+    transform = ZScoreNormalized(keys=["image"])
     out = transform({"image": image})["image"]
     assert out.shape == image.shape
     assert out.dtype == np.float32
     assert np.isfinite(out).all()
 
 
-def test_apply_clahe_and_zscored_passes_through_non_4d_arrays_unchanged():
+def test_zscore_normalized_passes_through_non_4d_arrays_unchanged():
     label = np.random.rand(3, 6, 6).astype(np.float32)  # 3D, not 4D
-    transform = ApplyCLAHEAndZscored(keys=["label"])
+    transform = ZScoreNormalized(keys=["label"])
     out = transform({"label": label})["label"]
     np.testing.assert_array_equal(out, label)
 

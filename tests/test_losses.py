@@ -130,3 +130,40 @@ def test_combine_main_and_aux_calls_loss_fn_with_correct_args(loss_cfg):
     combine_main_and_aux(fake_loss_fn, outputs, aux_z6, aux_z3, labels, loss_cfg)
 
     assert seen == [(outputs, labels), (aux_z6, labels), (aux_z3, labels)]
+
+
+def test_aux_loss_is_dice_plus_focal_tversky_without_hausdorff(loss_cfg):
+    """The deep-supervision heads get Dice + Focal-Tversky, NO Hausdorff. So
+    aux_loss must equal exactly dice_weight*Dice + tversky_weight*FT, and must
+    differ from the full composite once the HD term is at full strength."""
+    loss = build_loss_fn(loss_cfg)
+    loss.set_epoch(9, 10)   # HD at full strength on the main head
+    outputs = torch.randn(1, 3, 8, 8, 8)
+    labels = (torch.rand(1, 3, 8, 8, 8) > 0.5).float()
+
+    l_dice = loss.dice(outputs, labels)
+    l_ft = loss._focal_tversky(outputs, labels.float())
+    expected_aux = (loss_cfg.loss.dice_weight * l_dice
+                    + loss_cfg.loss.tversky_weight * l_ft)
+
+    aux = loss.aux_loss(outputs, labels)
+    assert aux.item() == pytest.approx(expected_aux.item(), rel=1e-5)
+    # the HD term is nonzero here, so the full composite must be different
+    assert aux.item() != pytest.approx(loss(outputs, labels).item())
+
+
+def test_combine_main_and_aux_uses_aux_loss_when_present(loss_cfg):
+    """With the real CombinedLoss (which exposes aux_loss), the aux heads use
+    Dice+FT, not the full composite — i.e. getattr picks up aux_loss."""
+    loss = build_loss_fn(loss_cfg)
+    loss.set_epoch(9, 10)
+    outputs = torch.randn(1, 3, 8, 8, 8)
+    aux_z6 = torch.randn(1, 3, 8, 8, 8)
+    aux_z3 = torch.randn(1, 3, 8, 8, 8)
+    labels = (torch.rand(1, 3, 8, 8, 8) > 0.5).float()
+
+    total = combine_main_and_aux(loss, outputs, aux_z6, aux_z3, labels, loss_cfg)
+    expected = (loss(outputs, labels)
+                + loss_cfg.loss.aux_z6_weight * loss.aux_loss(aux_z6, labels)
+                + loss_cfg.loss.aux_z3_weight * loss.aux_loss(aux_z3, labels))
+    assert total.item() == pytest.approx(expected.item(), rel=1e-5)
