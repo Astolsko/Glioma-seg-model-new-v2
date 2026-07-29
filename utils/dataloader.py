@@ -3,8 +3,7 @@ import sys
 from typing import List, Dict, Union, Sequence, Callable
 
 import numpy as np
-from skimage import exposure
-from monai.data import CacheDataset, DataLoader
+from monai.data import CacheDataset, DataLoader, list_data_collate
 from monai.transforms import (
     MapTransform,
     Randomizable,
@@ -35,60 +34,11 @@ def load_datalist(
     return datalist
 
 
-def apply_clahe_to_volume(volume: np.ndarray) -> np.ndarray:
-    if not np.any(np.isfinite(volume)) or volume.max() == volume.min():
-        return volume.astype(np.float32)
-
-    p1 = np.percentile(volume, 1)
-    p99 = np.percentile(volume, 99)
-    volume = np.clip(volume, p1, p99)
-
-    vol_min = volume.min()
-    vol_max = volume.max()
-    if vol_max - vol_min < 1e-8:
-        return volume.astype(np.float32)
-    volume = (volume - vol_min) / (vol_max - vol_min)
-
-    out = np.zeros_like(volume, dtype=np.float32)
-    for i in range(volume.shape[0]):
-        slc = volume[i]
-
-        # identify the brain mask for this slice — non-zero pixels only
-        brain_mask = slc > 1e-5
-
-        # if slice is mostly empty (less than 5% brain), skip CLAHE entirely
-        if brain_mask.sum() < 0.05 * slc.size:
-            out[i] = slc.astype(np.float32)
-            continue
-
-        slc_min, slc_max = slc[brain_mask].min(), slc[brain_mask].max()
-        if slc_max - slc_min < 1e-8:
-            out[i] = slc.astype(np.float32)
-            continue
-
-        # rescale only the brain region to [0, 1] for CLAHE
-        slc_work = slc.copy()
-        slc_work[brain_mask] = (slc[brain_mask] - slc_min) / (slc_max - slc_min)
-        slc_work[~brain_mask] = 0.0  # keep padding as exactly zero
-
-        # apply CLAHE
-        clahe_result = exposure.equalize_adapthist(
-            slc_work,kernel_size=32, clip_limit=0.005
-        ).astype(np.float32)
-
-        # restore zero padding — CLAHE will have set padding pixels to
-        # non-zero values, undo that by forcing them back to zero
-        clahe_result[~brain_mask] = 0.0
-
-        out[i] = clahe_result
-
-    return out
-
 def zscore_normalize(volume: np.ndarray) -> np.ndarray:
     volume = np.nan_to_num(volume, nan=0.0, posinf=0.0, neginf=0.0)
-    
-    # brain mask — after CLAHE, background is exactly 0.0
-    # use a small threshold to catch any CLAHE-shifted background pixels
+
+    # brain mask — BraTS background is stored as exactly 0.0, so a small
+    # positive threshold isolates the brain and normalizes over it alone.
     mask = volume > 1e-5
 
     if not mask.any():
@@ -139,7 +89,16 @@ class ConvertToMultiChannelBasedOnBratsClassesd(MapTransform):
         return d
 
 
-class ApplyCLAHEAndZscored(MapTransform):
+class ZScoreNormalized(MapTransform):
+    """Per-channel z-score normalization over the brain mask.
+
+    CLAHE was removed: it injected banding/over-sharpening artifacts on exactly
+    the fine T1ce enhancement texture ET depends on (see plan.md §3, §10 #1), so
+    the pipeline is per-channel z-score only, the standard BraTS normalization.
+    The former `apply_clahe_to_volume` had already been dead code; this transform
+    only ever called `zscore_normalize`, so dropping CLAHE changes no behavior.
+    """
+
     def __call__(self, data):
         d = dict(data)
         for key in self.keys:
@@ -239,8 +198,14 @@ def build_dataloaders(cfg):
         cache_rate=cfg.data.cache_rate,
         num_workers=cfg.data.num_workers_train,
     )
+    # RandCropByPosNegLabeld yields cfg.crop.num_samples crops per volume as a
+    # LIST, so the train loader needs list_data_collate to flatten those into
+    # the batch (each crop becomes its own training example). Passed explicitly
+    # rather than relying on monai.data.DataLoader's default so it can't
+    # silently regress. Val/test draw one whole volume each, no list to flatten.
     train_loader = DataLoader(train_ds, batch_size=cfg.data.batch_size_train,
-                               shuffle=True, num_workers=cfg.data.num_workers_train)
+                               shuffle=True, num_workers=cfg.data.num_workers_train,
+                               collate_fn=list_data_collate)
 
     val_ds = BratsDataset(
         root_dir=cfg.paths.root_dir,
@@ -268,8 +233,12 @@ def build_dataloaders(cfg):
     test_loader = DataLoader(test_ds, batch_size=cfg.data.batch_size_test,
                               shuffle=False, num_workers=cfg.data.num_workers_test)
 
-    # quick shape verification
+    # quick shape verification. RandCropByPosNegLabeld makes the train
+    # transform return a LIST of cfg.crop.num_samples crops per volume, so
+    # train_ds[0] is a list; inspect its first crop.
     sample = train_ds[0]
+    if isinstance(sample, list):
+        sample = sample[0]
     print("image:", sample["image"].shape)
     print("label:", sample["label"].shape)
 

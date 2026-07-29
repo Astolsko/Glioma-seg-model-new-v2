@@ -44,7 +44,7 @@
 
 | §10 item | Status in code | Evidence |
 |---|---|---|
-| #1 CLAHE → per-channel z-score | **DONE** | `ApplyCLAHEAndZscored` calls only `zscore_normalize`; `apply_clahe_to_volume` is **dead code** (never invoked). CLAHE is already gone. |
+| #1 CLAHE → per-channel z-score | **DONE + removed (Session 5)** | Transform was already z-score-only (`apply_clahe_to_volume` was dead code). Session 5 physically deleted the dead function + `skimage` import and renamed `ApplyCLAHEAndZscored → ZScoreNormalized`. Behavior-neutral. |
 | #2 Overlapping ET/TC/WT sigmoid multi-label | **DONE** | `ConvertToMultiChannelBasedOnBratsClassesd` builds TC/WT/ET channels; all losses use `sigmoid=True`; output_dim=3. |
 | #4 Boundary/HD term | **DONE (unannealed)** | `HausdorffDTLoss` at constant weight 0.2 from epoch 1 — see 0.3, this is a *problem*, not a win. |
 | #5 Deep supervision | **DONE** | `aux_head_z6` / `aux_head_z3` heads, weights 0.3 / 0.15 in `combine_main_and_aux`. |
@@ -102,7 +102,8 @@ Answer these against `logs/<new-run>/` before writing any code. Each one changes
 | # | Look at | If | Then |
 |---|---|---|---|
 | G1 | `eval/threshold_sweep.json` | best ET threshold is far from 0.5 (< 0.4 or > 0.6) | the model is badly calibrated on ET — Focal-Tversky α is inflating FPs. Consider α 0.7 → 0.6, or per-channel α/β (0.7.2 #4) |
-| G2 | ~~ET HD95 > 10 mm → raise `min_total_voxels`~~ | **SUPERSEDED (Session 4)** | The gate assumed one direction. `run_test` now reports `n_halluc` vs `n_miss` separately — read THAT. Hallucinations want `min_total` raised, misses want it lowered, and the aggregate cannot tell you which. Also read `hd95_*_clean`, not the raw mean |
+| | **FIRED (Session 5):** with the both-empty bug fixed, ET threshold → **0.05** (floor, monotone). ET IS badly calibrated (logits shrunk low). But note the sweep metric is blind to hallucinations, so 0.05 also maximises the 374.0-sentinel count — don't ship it verbatim. TC/WT → 0.10 (mild). Consider α 0.7→0.6 in the 1mm run. | | |
+| G2 | ~~ET HD95 > 10 mm → raise `min_total_voxels`~~ | **RESOLVED (Session 5)** | `run_test` reports `n_halluc` vs `n_miss` separately. Session 5 result: ET = **5 hallucinated + 1 missed** → hallucinations dominate → **RAISE `min_total_voxels`** (the gate's original raise-direction was right after all). Read `hd95_et_clean` = **3.10mm** (boundaries fine), not the 34.71mm raw mean which is 87% sentinel |
 | G3 | ET Dice vs `v1-run3`'s 0.783 | improved < 0.01 | the trilinear-resampling fix was NOT the ET ceiling → the ceiling is resolution itself, go to 0.7.2 #1 (native 1 mm) |
 | | **FIRED (Session 4):** ET Dice went *down* to 0.730 val / 0.764 test-without-postproc. Native 1 mm decided. | | |
 | G4 | `xai/faithful.json` sanity check | SSIM does not decay across the cascade | **stop and fix before publishing anything XAI** — the CAM is edge-detecting, not explaining, and every X1/X5 conclusion is void |

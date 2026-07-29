@@ -55,6 +55,22 @@ class CombinedLoss:
             + self.cfg.loss.hausdorff_weight * self._hd_scale * l_hd
         )
 
+    def aux_loss(self, outputs, labels):
+        """Loss for the deep-supervision heads: Dice + Focal-Tversky, NO
+        Hausdorff. The Hausdorff term stays off the aux heads on purpose — it is
+        the expensive one (a scipy CPU distance transform per channel per
+        sample) and its own authors ramp it in on the MAIN output only.
+
+        Dice-only aux (the previous behaviour) supplies overlap gradients but no
+        recall pressure, and the recall regression is exactly what the fine
+        decoder scales the aux heads feed need to fix. Adding Focal-Tversky
+        (alpha>beta => false-negative weighting) puts that pressure on those
+        scales for near-zero cost (Tversky is cheap GPU work)."""
+        l_dice = self.dice(outputs, labels)
+        l_ft = self._focal_tversky(outputs, labels.float())
+        return (self.cfg.loss.dice_weight * l_dice
+                + self.cfg.loss.tversky_weight * l_ft)
+
 
 def build_loss_fn(cfg):
     """Weighted combination of Dice + Focal-Tversky + Hausdorff-DT losses."""
@@ -63,20 +79,18 @@ def build_loss_fn(cfg):
 
 def combine_main_and_aux(loss_function, outputs, aux_z6, aux_z3, labels, cfg):
     """Main head gets the full composite loss; the deep-supervision heads get
-    Dice only.
+    Dice + Focal-Tversky (NO Hausdorff — see CombinedLoss.aux_loss).
 
-    The aux heads exist to keep gradients flowing to the fine decoder scales,
-    which plain Dice already does. Running the full composite on them meant
-    three HausdorffDTLoss evaluations per step instead of one — and
-    HausdorffDT computes a Euclidean distance transform per channel per
-    sample, on CPU via scipy unless cuCIM is installed. That was a large
-    fraction of the ~2500s epoch, spent on a term whose own authors ramp it in
-    slowly on the MAIN output.
+    Running the full composite on the aux heads too would mean three
+    HausdorffDTLoss evaluations per step instead of one — each a scipy CPU
+    distance transform per channel per sample, a large fraction of the epoch.
+    Keeping HD on the main head only preserves that speedup while restoring the
+    Focal-Tversky recall pressure on the fine decoder scales the aux heads feed.
 
-    Falls back to calling `loss_function` itself when it has no `.dice`
+    Falls back to calling `loss_function` itself when it exposes no `aux_loss`
     attribute, so a plain callable still works (the tests rely on this).
     """
-    aux_loss_fn = getattr(loss_function, "dice", loss_function)
+    aux_loss_fn = getattr(loss_function, "aux_loss", loss_function)
     return (
         loss_function(outputs, labels)
         + cfg.loss.aux_z6_weight * aux_loss_fn(aux_z6, labels)

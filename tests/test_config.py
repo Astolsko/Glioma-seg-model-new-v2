@@ -27,34 +27,14 @@ def test_unetr_extract_layers_valid_for_forward_unpacking():
     assert list(cfg.unetr.extract_layers) == sorted(cfg.unetr.extract_layers)
 
 
-def test_crop_start_slices_are_nonnegative():
-    assert cfg.crop.train_start_slice >= 0
-    assert cfg.crop.val_start_slice >= 0
-
-
-def test_crop_window_fits_within_known_raw_scan_depth():
-    """BraTS scans are co-registered to a fixed 240x240x155 grid — verified
-    directly against this dataset (every sampled patient in data/combined/
-    has exactly that shape at 1mm spacing). CropRawDepthd now crops the RAW
-    scan (before Resized), always keeping exactly cfg.unetr.img_shape[-1]
-    slices starting at *_start_slice — so start_slice + img_shape[-1] must
-    not exceed 155, or the window runs past the available depth (triggering
-    CropRawDepthd's MISMATCH warning) and Resized has to compress/stretch
-    again, defeating the point of cropping on the raw scan.
-    """
-    BRATS_RAW_DEPTH = 155
-    target_depth = cfg.unetr.img_shape[-1]
-
-    assert cfg.crop.train_start_slice + target_depth <= BRATS_RAW_DEPTH, (
-        f"train_start_slice={cfg.crop.train_start_slice} + img_shape[-1]={target_depth} "
-        f"exceeds the raw scan depth ({BRATS_RAW_DEPTH}) — use tools/crop_visual_check.py "
-        "to pick a start_slice that leaves room for the full window."
-    )
-    assert cfg.crop.val_start_slice + target_depth <= BRATS_RAW_DEPTH, (
-        f"val_start_slice={cfg.crop.val_start_slice} + img_shape[-1]={target_depth} "
-        f"exceeds the raw scan depth ({BRATS_RAW_DEPTH}) — use tools/crop_visual_check.py "
-        "to pick a start_slice that leaves room for the full window."
-    )
+def test_crop_config_is_sane_for_native_1mm():
+    """Native 1mm pipeline: CropForegroundd (fg_threshold) + RandCropByPosNegLabeld
+    (pos/neg/num_samples) replaced the old fixed-depth CropRawDepthd, so there
+    are no more *_start_slice knobs — the brain crop is adaptive."""
+    assert cfg.crop.fg_threshold >= 0
+    assert cfg.crop.pos > 0 and cfg.crop.neg >= 0
+    assert cfg.crop.pos + cfg.crop.neg > 0
+    assert cfg.crop.num_samples >= 1
 
 
 def test_loss_weights_are_nonnegative():
@@ -78,25 +58,14 @@ def test_data_fractions_leave_room_for_training_split():
     assert cfg.data.val_frac + cfg.data.test_frac < 1
 
 
-def test_voxel_spacing_matches_the_resize_the_pipeline_actually_applies():
+def test_voxel_spacing_is_native_1mm():
     """HD95 is the only metric that reads voxel_spacing, and it reports mm.
 
-    Resized squeezes H/W from BraTS's 240 down to img_shape[0:2], so an
-    in-plane voxel is 240/128 = 1.875mm, not 1mm. Depth is exempt because
-    CropRawDepthd already hands Resized exactly img_shape[-1] slices, making
-    the depth resize a no-op. Hardcoding (1,1,1) here understated every
-    in-plane HD95 by 1.875x.
+    The native 1mm pipeline keeps full resolution (no Resized), so every voxel
+    is a real 1mm^3 voxel and voxel_spacing is (1,1,1), honest by construction.
+    (Under the old resized pipeline this was 240/img_shape = 1.875mm in plane.)
     """
-    expected = (
-        cfg.metrics.raw_inplane_size / cfg.unetr.img_shape[0],
-        cfg.metrics.raw_inplane_size / cfg.unetr.img_shape[1],
-        1.0,
-    )
-    assert tuple(cfg.metrics.voxel_spacing) == pytest.approx(expected)
-    assert cfg.metrics.voxel_spacing[2] == 1.0, (
-        "depth must stay 1mm/voxel — if it doesn't, CropRawDepthd is no longer "
-        "handing Resized an exact-depth window and the resize is resampling slices"
-    )
+    assert tuple(cfg.metrics.voxel_spacing) == pytest.approx((1.0, 1.0, 1.0))
 
 
 def test_inference_settings_have_one_entry_per_output_channel():
