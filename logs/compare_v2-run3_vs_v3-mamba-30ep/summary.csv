@@ -1,0 +1,55 @@
+section,metric,v2-run3,v3-mamba-30ep,difference (b - a),better
+model,encoder,vit,mamba,,
+model,"parameters, total (M)",156.27,102.14,-54.14,
+model,"parameters, encoder (M)",79.05,15.72,-63.33,
+model,epochs trained,50,30,-20,
+model,min / epoch (mean),41.83,44.83,3.0010,v2-run3
+model,training hours,34.86,22.41,-12.44,v3-mamba-30ep
+val @ epoch 30,mean Dice,0.8413,0.8643,0.0230,v3-mamba-30ep
+val @ epoch 30,Dice TC,0.8459,0.8735,0.0276,v3-mamba-30ep
+val @ epoch 30,Dice WT,0.8953,0.9124,0.0171,v3-mamba-30ep
+val @ epoch 30,Dice ET,0.7828,0.8071,0.0244,v3-mamba-30ep
+val @ epoch 30,sensitivity ET,0.7179,0.7399,0.0220,v3-mamba-30ep
+val @ epoch 30,mean HD95 (mm),11.59,10.60,-0.9932,v3-mamba-30ep
+val @ epoch 30,HD95 ET (mm),22.13,21.95,-0.1783,v3-mamba-30ep
+"val, best within 30 ep",mean Dice,0.8413,0.8676,0.0263,v3-mamba-30ep
+"val, best within 30 ep",at epoch,30,23,-7,
+"val, best overall",mean Dice,0.8504,0.8676,0.0172,v3-mamba-30ep
+"val, best overall",at epoch,41,23,-18,
+test (TTA + tuned thresholds + post-proc),mean Dice,0.8684,0.8669,-0.0015,v2-run3
+test (TTA + tuned thresholds + post-proc),Dice TC,0.8782,0.8669,-0.0112,v2-run3
+test (TTA + tuned thresholds + post-proc),Dice WT,0.9109,0.9148,0.0038,v3-mamba-30ep
+test (TTA + tuned thresholds + post-proc),Dice ET,0.8161,0.8191,0.0029,v3-mamba-30ep
+test (TTA + tuned thresholds + post-proc),mean HD95 (mm),18.18,17.03,-1.1443,v3-mamba-30ep
+test (TTA + tuned thresholds + post-proc),HD95 TC (mm),3.9391,10.12,6.1767,v2-run3
+test (TTA + tuned thresholds + post-proc),HD95 WT (mm),4.8355,5.8171,0.9816,v2-run3
+test (TTA + tuned thresholds + post-proc),HD95 ET (mm),45.76,35.16,-10.59,v3-mamba-30ep
+test (TTA + tuned thresholds + post-proc),"HD95 ET, both-non-empty cases (mm)",3.5142,3.6244,0.1102,v2-run3
+test (TTA + tuned thresholds + post-proc),ET hallucinated (of n_test),6,4,-2,v3-mamba-30ep
+test (TTA + tuned thresholds + post-proc),ET missed (of n_test),2,2,0.0000,
+test (TTA + tuned thresholds + post-proc),sensitivity TC,0.8789,0.8637,-0.0152,v2-run3
+test (TTA + tuned thresholds + post-proc),sensitivity WT,0.9229,0.9286,0.0057,v3-mamba-30ep
+test (TTA + tuned thresholds + post-proc),sensitivity ET,0.7599,0.7637,0.0038,v3-mamba-30ep
+test (TTA + tuned thresholds + post-proc),n_test,70,70,0.0000,
+test (TTA + tuned thresholds + post-proc),tuned thresholds TC/WT/ET,0.15/0.05/0.05,0.15/0.1/0.05,,
+XAI: Dice change when a modality is removed,-FLAIR -> TC,-0.6444,-0.1922,0.4523,
+XAI: Dice change when a modality is removed,-FLAIR -> WT,-0.7615,-0.3391,0.4224,
+XAI: Dice change when a modality is removed,-FLAIR -> ET,-0.4823,-0.0651,0.4172,
+XAI: Dice change when a modality is removed,-T1 -> TC,-0.0985,-0.0816,0.0169,
+XAI: Dice change when a modality is removed,-T1 -> WT,-0.0334,-0.0481,-0.0148,
+XAI: Dice change when a modality is removed,-T1 -> ET,-0.0500,-0.0738,-0.0239,
+XAI: Dice change when a modality is removed,-T1ce -> TC,-0.5731,-0.4412,0.1319,
+XAI: Dice change when a modality is removed,-T1ce -> WT,-0.0926,-0.0545,0.0381,
+XAI: Dice change when a modality is removed,-T1ce -> ET,-0.6450,-0.6608,-0.0158,
+XAI: Dice change when a modality is removed,-T2 -> TC,-0.0831,-0.0195,0.0636,
+XAI: Dice change when a modality is removed,-T2 -> WT,-0.0435,-0.0119,0.0316,
+XAI: Dice change when a modality is removed,-T2 -> ET,-0.0515,-0.0131,0.0384,
+"XAI: MC-dropout, Dice after referring 2% most-uncertain voxels",TC (before -> after),0.883 -> 0.959,0.901 -> 0.968,,
+"XAI: MC-dropout, Dice after referring 2% most-uncertain voxels",WT (before -> after),0.857 -> 0.913,0.878 -> 0.922,,
+"XAI: MC-dropout, Dice after referring 2% most-uncertain voxels",ET (before -> after),0.506 -> 0.591,0.530 -> 0.624,,
+"XAI: MC-dropout, Dice after referring 2% most-uncertain voxels",dropout layers sampled,52,15,-37,
+XAI: deletion AUC (lower = more faithful),HiResCAM,0.0412,0.0581,0.0168,v2-run3
+XAI: deletion AUC (lower = more faithful),Grad-CAM,0.0395,0.0537,0.0142,v2-run3
+XAI: deletion AUC (lower = more faithful),attention / hidden-attention rollout,0.4549,0.7075,0.2526,v2-run3
+XAI: deletion AUC (lower = more faithful),random ordering (null),0.7025,0.7544,0.0519,v2-run3
+XAI: deletion AUC (lower = more faithful),"randomisation SSIM, fully randomised",0.9658,0.9625,-0.0033,v3-mamba-30ep

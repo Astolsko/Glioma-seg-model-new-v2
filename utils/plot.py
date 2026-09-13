@@ -1,8 +1,15 @@
 import csv
 import os
 
-from matplotlib import pyplot as plt
 import matplotlib as mpl
+# Force the non-interactive Agg backend BEFORE importing pyplot. We only ever
+# save figures to disk (no GUI), and if matplotlib picks an interactive backend
+# (TkAgg, which it does when $DISPLAY is set under X forwarding), Tk objects get
+# garbage-collected off the main thread once DataLoader workers/threads spawn and
+# abort the whole process with "Tcl_AsyncDelete: async handler deleted by the
+# wrong thread" -> core dump. Agg has no such objects.
+mpl.use("Agg")
+from matplotlib import pyplot as plt
 
 
 def _mid_slice(volume):

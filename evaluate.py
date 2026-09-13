@@ -21,7 +21,8 @@ ensure_dependencies()
 
 from config import cfg
 from utils.dataloader import build_dataloaders
-from utils.engine import build_model, get_device, run_inference, run_test
+from utils.engine import (apply_run_model_config, build_model, get_device, run_inference,
+                          run_test)
 from utils.postprocess import save_infer_config, tune_and_save
 
 
@@ -78,6 +79,7 @@ def main():
     if not os.path.exists(paths.checkpoint_path):
         raise SystemExit(f"No checkpoint at {paths.checkpoint_path}")
 
+    apply_run_model_config(cfg, run_dir)   # the encoder this run was trained with
     device = get_device()
     model = build_model(cfg, device)
     loaders = build_dataloaders(cfg)

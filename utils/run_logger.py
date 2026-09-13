@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import sys
+import traceback
 from datetime import datetime
 
 
@@ -54,14 +55,21 @@ class RunLogger:
         xai/                  — explainability figures and per-component JSON
     """
 
-    def __init__(self, run_name=None, base_dir="logs"):
+    def __init__(self, run_name=None, base_dir="logs", resume=False):
         if not run_name:
             run_name = input("Enter a name for this run (used for the logs folder): ")
         run_name = _sanitize_run_name(run_name)
         if not run_name:
             run_name = datetime.now().strftime("run_%Y%m%d_%H%M%S")
 
-        self.run_dir = _unique_run_dir(base_dir, run_name)
+        # A resumed run must land back in the SAME folder — minting logs/<name>_1
+        # would scatter the second half of a run away from its first half, and
+        # the checkpoint being resumed from lives in the original.
+        self.resume = resume
+        if resume:
+            self.run_dir = os.path.join(base_dir, run_name)
+        else:
+            self.run_dir = _unique_run_dir(base_dir, run_name)
         self.plots_dir = os.path.join(self.run_dir, "plots")
         self.vis_dir = os.path.join(self.run_dir, "visualizations")
         self.attention_dir = os.path.join(self.run_dir, "attention")
@@ -81,6 +89,14 @@ class RunLogger:
         self.test_metrics_csv_path = os.path.join(self.testing_dir, "test_metrics.csv")
         self.config_snapshot_path = os.path.join(self.run_dir, "config_snapshot.json")
         self.checkpoint_path = os.path.join(self.checkpoint_dir, "best_metric_model.pth")
+        # Two different artifacts, deliberately kept apart:
+        #   best_metric_model.pth — WEIGHTS ONLY (EMA when EMA is on), the thing
+        #     evaluate.py / xai.py load and the thing that gets published. Only
+        #     rewritten when val mean Dice improves.
+        #   last.pth — the FULL training state (model + EMA + optimizer +
+        #     scheduler + scaler + RNG + counters), rewritten every epoch so a
+        #     crash costs at most one epoch. Never used for reporting.
+        self.last_checkpoint_path = os.path.join(self.checkpoint_dir, "last.pth")
 
         self._log_file = None
         self._stdout = None
@@ -102,6 +118,14 @@ class RunLogger:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # Log the traceback BEFORE restoring the streams. Python prints an
+        # uncaught exception only after every __exit__ has run, by which point
+        # sys.stderr is the bare terminal again — which is why v2-run2's OOM
+        # left log.txt ending on a tidy "Run finished" with no error in it. The
+        # crash that killed a 33-epoch run has to be in the run's own log.
+        if exc_type is not None:
+            print(f"\n=== RUN FAILED: {exc_type.__name__}: {exc_val} ===")
+            traceback.print_exception(exc_type, exc_val, exc_tb, file=sys.stdout)
         print(f"Run finished {datetime.now().isoformat(timespec='seconds')}")
         if self._metrics_file is not None:
             self._metrics_file.close()
@@ -121,7 +145,31 @@ class RunLogger:
             json.dump(_to_plain(cfg), f, indent=2)
         print(f"Config snapshot saved: {self.config_snapshot_path}")
 
-    def open_metrics_csv(self, fieldnames):
+    def open_metrics_csv(self, fieldnames, resume_from_epoch=0):
+        """Open metrics.csv for writing.
+
+        On a resume the already-completed rows are kept and the file is reopened
+        in append mode — the epoch curves in plots/ are drawn from this CSV, so
+        truncating it would erase the first half of the run's history and leave
+        plot_metrics_from_csv drawing a graph that starts at epoch 34.
+
+        Rows for epochs at or beyond `resume_from_epoch` are dropped first: an
+        epoch that was written but whose checkpoint never landed gets re-run,
+        and without this its old row would sit in the CSV twice.
+        """
+        if self.resume and os.path.exists(self.metrics_csv_path) and resume_from_epoch > 0:
+            with open(self.metrics_csv_path, newline="") as f:
+                kept = [r for r in csv.DictReader(f)
+                        if int(float(r.get("epoch") or 0)) <= resume_from_epoch]
+            with open(self.metrics_csv_path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(kept)
+            print(f"Resuming metrics.csv with {len(kept)} epoch rows kept")
+            self._metrics_file = open(self.metrics_csv_path, "a", newline="")
+            self._metrics_writer = csv.DictWriter(self._metrics_file, fieldnames=fieldnames)
+            return
+
         self._metrics_file = open(self.metrics_csv_path, "w", newline="")
         self._metrics_writer = csv.DictWriter(self._metrics_file, fieldnames=fieldnames)
         self._metrics_writer.writeheader()

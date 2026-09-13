@@ -7,6 +7,8 @@ the training path:
   X2  Modality attribution by ablation                    -> modality_attribution()
   X3  MC-dropout predictive uncertainty                   -> mc_dropout_predict()
   X4  Attention rollout through the 12 ViT blocks         -> attention_rollout()
+      (Mamba encoder: hidden-attention rollout of its deepest stage,
+       mamba_hidden_attention_rollout())
   X5  Quantitative evaluation of the above                -> deletion_curve(),
                                                              localization_scores(),
                                                              sanity_check_randomization()
@@ -28,6 +30,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import matplotlib
+matplotlib.use("Agg")   # non-interactive backend before pyplot; see utils/plot.py
 from matplotlib import pyplot as plt
 
 from utils.metrics import minmax_normalize
@@ -245,8 +249,9 @@ def enable_dropout(model):
 
     Not model.train() — that would also re-enable deep-supervision heads and
     change the forward signature. The model already carries dropout worth
-    sampling: p=0.2 in every transformer block, p=0.1 spatial dropout in each
-    CoordAtt3D.
+    sampling: p=0.2 in every transformer block (or, for the Mamba encoder,
+    after every ToM mixer and inside every stage MLP — cfg.mamba.dropout),
+    p=0.1 spatial dropout in each CoordAtt3D.
     """
     count = 0
     for module in model.modules():
@@ -327,6 +332,9 @@ def attention_rollout(model, image, cfg):
     Granularity is one 16^3 patch, so this is a coarse global-context map and
     is complementary to, not a substitute for, the voxel-resolution CAMs.
     """
+    if getattr(model, "encoder_type", "vit") == "mamba":
+        return mamba_hidden_attention_rollout(model, image)
+
     caches, handles = [], []
 
     def _make_hook(store):
@@ -361,6 +369,64 @@ def attention_rollout(model, image, cfg):
 
     relevance = rollout.mean(0)                           # (P,)
     relevance = relevance.reshape(1, 1, *model.patch_dim)
+    relevance = F.interpolate(relevance.float(), size=image.shape[2:],
+                              mode="trilinear", align_corners=False)
+    return _normalize(_to_numpy(relevance)[0, 0])
+
+
+def mamba_hidden_attention_rollout(model, image):
+    """The Mamba encoder's counterpart of attention_rollout.
+
+    A Mamba layer has no attention weights, but its selective scan is a causal
+    linear operator over tokens whose matrix can be written out exactly (Ali,
+    Zimerman & Wolf 2024, "The Hidden Attention of Mamba Models"; see
+    blocks/VisionMamba.py). The ToM mixer runs three such scans (forward,
+    backward, across slices); mapped back to raster order and summed, the
+    layer's mixing matrix is dense, like attention. That matrix is taken for
+    every layer of the DEEPEST stage, whose 8x8x6 token grid is the same 1/16
+    grid the ViT's 16^3 patches live on, so the two encoders' maps line up.
+    Rows are normalised to distributions and rolled out with the same residual
+    correction as the ViT (Abnar & Zuidema), and relevance is again the column
+    mean.
+
+    Coverage differs, and the figure title says so: the ViT rollout spans all
+    12 blocks of a flat encoder; this spans the deepest stage (2 layers) of a
+    hierarchical one, whose earlier stages mix tokens on finer grids with no
+    common token set to multiply through.
+    """
+    mixers = model.mamba_encoder.last_stage_mixers()
+    captured = [[] for _ in mixers]
+    handles = []
+
+    def _make_hook(store):
+        def _hook(_module, inputs, _output):
+            store.append((inputs[0].detach(), int(inputs[1])))
+        return _hook
+
+    for mixer, store in zip(mixers, captured):
+        handles.append(mixer.register_forward_hook(_make_hook(store)))
+    try:
+        with torch.no_grad():
+            model(image)
+    finally:
+        for handle in handles:
+            handle.remove()
+
+    rollout = None
+    for mixer, store in zip(mixers, captured):
+        if not store:
+            continue
+        tokens, nslices = store[0]
+        attn = mixer.hidden_attention(tokens, nslices)[0]              # (P, P)
+        attn = attn / attn.sum(dim=-1, keepdim=True).clamp_min(1e-12)
+        attn = attn + torch.eye(attn.shape[0], device=attn.device)
+        attn = attn / attn.sum(dim=-1, keepdim=True)
+        rollout = attn if rollout is None else attn @ rollout
+
+    if rollout is None:
+        return None
+
+    relevance = rollout.mean(0).reshape(1, 1, *model.patch_dim)
     relevance = F.interpolate(relevance.float(), size=image.shape[2:],
                               mode="trilinear", align_corners=False)
     return _normalize(_to_numpy(relevance)[0, 0])
@@ -463,10 +529,23 @@ RANDOMIZATION_ORDER = [
 ]
 
 
+def randomization_order(model):
+    """RANDOMIZATION_ORDER with the model's own encoder as the last step
+    ("transformer" for the ViT, "mamba_encoder" for the Mamba model)."""
+    encoder_names = (model.encoder_module_names() if hasattr(model, "encoder_module_names")
+                     else ["transformer"])
+    return [*RANDOMIZATION_ORDER[:-1], *encoder_names]
+
+
 def _reinitialize(module):
     """Re-initialise every submodule that knows how, i.e. draw fresh weights
     from the same distribution training started from."""
-    for sub in module.modules():
+    # Children first, parents last: a composite module's reset_parameters
+    # (the Mamba SSM branch's A_log/D/dt init) must run AFTER its nn.Linear
+    # children have reset themselves, or dt_proj's default reset would undo
+    # Mamba's dt initialisation. For the ViT every resettable module is a
+    # leaf, so the order changes nothing there.
+    for sub in reversed(list(module.modules())):
         if hasattr(sub, "reset_parameters"):
             sub.reset_parameters()
 
@@ -493,7 +572,7 @@ def sanity_check_randomization(model, image, label, class_idx, cfg, layer_path,
     reference, _ = cam_for_sample(model, image, label, class_idx, cfg, layer_path, method)
     results = []
 
-    for name in (order or RANDOMIZATION_ORDER):
+    for name in (order or randomization_order(model)):
         _reinitialize(_resolve_layer(model, name))
         current, _ = cam_for_sample(model, image, label, class_idx, cfg, layer_path, method)
         results.append({
@@ -718,7 +797,9 @@ def component_rollout(model, samples, out_dir, cfg):
         gt = label[0].cpu().numpy() > 0.5
         save_overlay(
             image[0, 2].cpu().numpy(), relevance, gt[1],
-            "Attention rollout (all 12 blocks, residual-corrected)",
+            ("Mamba hidden-attention rollout (deepest stage, residual-corrected)"
+             if getattr(model, "encoder_type", "vit") == "mamba"
+             else "Attention rollout (all 12 blocks, residual-corrected)"),
             os.path.join(out_dir, f"rollout_s{sample_idx}.png"),
         )
         results[f"s{sample_idx}"] = {

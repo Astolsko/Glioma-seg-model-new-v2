@@ -18,7 +18,7 @@ torch = pytest.importorskip("torch")
 
 from utils.attention import (
     register_attention_hook, extract_attention_map, save_attention_overlay,
-    save_attention_evolution,
+    save_attention_evolution, set_attention_capture,
 )
 
 
@@ -29,8 +29,9 @@ class _FakeValDataset:
         self.data = [{"image": ["", "", t1ce_path, ""]}]
 
 
-def _run_forward(model, img_shape, input_dim):
+def _run_forward(model, img_shape, input_dim, capture=True):
     cache = register_attention_hook(model)
+    set_attention_capture(cache, capture)
     x = torch.randn(1, input_dim, *img_shape)
     model.eval()
     with torch.no_grad():
@@ -42,6 +43,30 @@ def test_register_attention_hook_populates_cache_on_forward(tiny_unetr, tiny_une
     cache = _run_forward(tiny_unetr, tiny_unetr_kwargs["img_shape"], tiny_unetr_kwargs["input_dim"])
     assert "attn" in cache
     assert cache["attn"].dim() == 4  # (B, num_heads, num_patches, num_patches)
+
+
+def test_hook_captures_nothing_until_armed(tiny_unetr, tiny_unetr_kwargs):
+    """The hook fires on every sliding-window patch of every validation sample,
+    but the map is only consumed on the epochs that save an overlay. Capturing
+    unconditionally cloned a (B, heads, patches, patches) tensor tens of
+    thousands of times per run and left the last one resident in GPU memory."""
+    cache = _run_forward(tiny_unetr, tiny_unetr_kwargs["img_shape"],
+                         tiny_unetr_kwargs["input_dim"], capture=False)
+    assert "attn" not in cache
+
+
+def test_disarming_drops_the_cached_map(tiny_unetr, tiny_unetr_kwargs):
+    cache = _run_forward(tiny_unetr, tiny_unetr_kwargs["img_shape"], tiny_unetr_kwargs["input_dim"])
+    assert "attn" in cache
+    set_attention_capture(cache, False)
+    assert "attn" not in cache
+
+
+def test_captured_map_is_on_cpu(tiny_unetr, tiny_unetr_kwargs):
+    """extract_attention_map's first move is .cpu() anyway, so capturing to CPU
+    changes nothing downstream — and keeps nothing pinned in the GPU pool."""
+    cache = _run_forward(tiny_unetr, tiny_unetr_kwargs["img_shape"], tiny_unetr_kwargs["input_dim"])
+    assert cache["attn"].device.type == "cpu"
 
 
 def test_extract_attention_map_upsamples_to_requested_shape(tiny_unetr, tiny_unetr_kwargs):
