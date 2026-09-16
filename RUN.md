@@ -20,7 +20,7 @@ Timings are for the workstation the runs actually happen on: **1x RTX A6000**,
 | Command | Retrains? | Cost | Writes to |
 |---|---|---|---|
 | `pytest` | no | seconds | — |
-| `python train.py --name <run>` | **yes** | ~45h | `logs/<run>/` (everything) |
+| `python train.py --name <run>` | **yes** | ~45-48h (60 ep) | `logs/<run>/` (everything) |
 | `python train.py --name <run> --resume` | **yes** | remaining epochs | `logs/<run>/` (same folder) |
 | `tools/train_supervisor.sh <run>` | **yes** | ~45h + restarts | `logs/<run>/` (same folder) |
 | `python evaluate.py --run <run> --tune-thresholds` | no | ~2h | `logs/<run>/eval/` |
@@ -28,6 +28,7 @@ Timings are for the workstation the runs actually happen on: **1x RTX A6000**,
 | `python tools/smoke_test.py` | no | ~10-15min | temp dirs only |
 | `python tools/crosscheck_segmamba.py` | no | ~1min | — |
 | `python tools/compare_runs.py v2-run3 <run>` | no | seconds | `logs/compare_<a>_vs_<b>/` |
+| `python tools/replot.py --run <run>` | no | seconds (CPU) | `logs/<run>/plots/` |
 | `python tools/cache_predictions.py --run <run> --out <dir>` | no | ~1-1.5h per run (GPU) | `<dir>/<run>/` (~8 GB) |
 | `python tools/operating_point_study.py --cache <dir> --runs <a> <b>` | no | ~20-30min (CPU) | `logs/compare_<a>_vs_<b>/operating_point_study.{md,json}`, `logs/<run>/eval/per_patient_test.csv` |
 | `tools/setup_mamba_env.sh` | no | ~10min | `/DATA/conda_envs/mamba` |
@@ -59,9 +60,9 @@ python train.py --name v2-tierB
 
 Omit `--name` and it prompts. Runs, in order:
 
-1. **Train** (`cfg.epoch`, currently 30, with warmup + cosine + EMA)
+1. **Train** (`cfg.epoch`, currently 60, with warmup + cosine + EMA; per-epoch validation at `cfg.infer.val_sw_overlap` = 0.5)
 2. **Tune thresholds** on the *validation* split (`cfg.infer.tune_thresholds_after_training`)
-3. **Test** with the full inference recipe — tuned thresholds, TTA, post-processing
+3. **Test** with the full inference recipe — tuned thresholds, TTA, post-processing, `cfg.infer.sw_overlap` = 0.75
 4. **XAI suite** (`cfg.xai.run_after_training`), all five components
 
 Produces:
@@ -71,8 +72,10 @@ logs/<run>/
   log.txt                  full stdout capture
   config_snapshot.json     cfg as it was at run start
   metrics.csv              one row per epoch
+  train_steps.csv          one row per optimizer step (section 8)
+  val_steps.csv            one row per validation patient per epoch (section 8)
   checkpoints/             best_metric_model.pth  (EMA weights when EMA is on)
-  plots/                   loss / dice / hd95 / iou curves
+  plots/                   loss / dice / iou / hd95 / lr / loss_steps curves (redraw: section 8)
   visualizations/          pre-training qualitative data checks
   attention/               per-epoch attention overlays
   eval/                    threshold_sweep.json, infer_config.json
@@ -374,6 +377,78 @@ commands can share the GPU; that way each takes about 1.5 h.
    in-train XAI covers the same patients, but it counts both-empty as Dice 1.0
    (on ET that mixes presence/absence into the modality effect) and reports no
    CIs. The anchor re-derives the in-train numbers from the cache.
+
+---
+
+## 8. Per-step CSVs and re-plotting the curves (no retraining)
+
+```bash
+python tools/replot.py --run <run>                                    # cfg.plot defaults
+python tools/replot.py --run <run> --font-size 16 --fig-size 8 5 --dpi 300 --format png pdf
+python tools/replot.py --run <run> --epoch-smoothing 0 --step-smoothing 0 --out figures/<run>
+```
+
+Seconds, CPU only. It reads only the run's CSVs and rewrites `logs/<run>/plots/`
+(or `--out`). It works on older runs too; they have no `train_steps.csv`, so they
+get no per-step curve and no main-head train-loss line.
+
+Every value in the CSVs is raw, never smoothed:
+
+| File | One row per | Columns |
+|---|---|---|
+| `metrics.csv` | epoch | lr, train/val loss, per-region + mean Dice, HD95, Sens, Spec, IoU, mIoU, F1, AUC |
+| `train_steps.csv` | optimizer step | epoch, step, global_step, lr, step time, total loss, main-head loss, both aux-head losses, unweighted Dice / Focal-Tversky / Hausdorff terms, hd_scale |
+| `val_steps.csv` | validation patient, per epoch | epoch, sample_index, patient, step time, val loss + its terms, Dice / IoU / mIoU / HD95 / Sens / Spec / F1 / AUC per region + mean |
+
+Footguns:
+- `train_loss` in metrics.csv includes the deep-supervision heads
+  (+0.3·aux_z6 + 0.15·aux_z3); `val_loss` is the main head only. Compare `val_loss`
+  with `loss_main` (the dashed line in `loss.png`), not with `train_loss`.
+- Region Dice in metrics.csv averages over patients whose ground truth has that
+  region (MONAI's `ignore_empty`). In val_steps.csv that patient's `dice_*` is
+  NaN, and the row's `mean_dice` averages the regions present, so it is not the
+  epoch's `mean_dice`.
+- AUC is computed every `cfg.metrics.auc_every_n_epochs` only. On other epochs
+  val_steps.csv leaves `auc_*` blank and metrics.csv writes 0.
+- Smoothing (`cfg.plot.epoch_smoothing` 0.3, `step_smoothing` 0.9) is a
+  bias-corrected EMA applied when drawing. The raw curve stays visible under it
+  and the weight is printed on the figure. Take reported numbers from the CSVs,
+  never off a smoothed curve.
+- Per-epoch validation runs at `cfg.infer.val_sw_overlap` (0.5), the test pass
+  at `cfg.infer.sw_overlap` (0.75), so a val curve and a test number differ in
+  overlap as well as split.
+- `lr` in metrics.csv (and so `lr.png`) is logged after that epoch's scheduler
+  step, i.e. it is the next epoch's LR. `lr` in train_steps.csv is the LR each
+  step actually used.
+
+---
+
+## 9. Deliberate data-leak run (assignment demonstration)
+
+`cfg.data.leak = "patient"` (config.py) adds every validation patient to the
+training set, in `utils/dataloader.py:BratsDataset._split_datalist`. The val and
+test splits themselves do not change, and no test patient is trained on. **Set it
+back to `None` for any honest run.**
+
+```bash
+conda activate mamba
+python train.py --name v5-mamba-leak-demo                 # the name MUST contain "leak"
+python train.py --name v5-mamba-leak-demo --auto-resume   # if it stops partway
+python tools/replot.py --run v5-mamba-leak-demo
+```
+
+Labelled by design: train.py exits if the run name lacks "leak"; log.txt prints a
+LEAK banner with the train/val overlap count; `config_snapshot.json` records
+`data.leak`; every curve in `plots/` carries a LEAKED SPLIT watermark (replot.py
+reads the snapshot, so redrawn plots keep it).
+
+How to read it: per-epoch validation, the best-epoch choice and the tuned
+thresholds are all computed on patients the model trained on; the test patients
+were not. The gap between this run's val and test metrics, and between its val
+curve and an honest run's at matched epochs, is the size of the leak. Expect it
+to be small on this dataset: under the honest split 72 of the 105 val patients
+already have an identical BraTS19/BraTS20 twin in train (journal, Session 8), so
+only 33 are newly leaked.
 
 ---
 

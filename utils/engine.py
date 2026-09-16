@@ -14,7 +14,7 @@ from utils.attention import (
     set_attention_capture,
 )
 from utils.checkpoint import load_training_state, save_training_state
-from utils.losses import combine_main_and_aux
+from utils.losses import main_and_aux_losses
 from utils.metrics import (
     compute_hd95, compute_sensitivity, compute_iou, compute_miou,
     compute_confusion, compute_specificity, compute_f1, compute_roc_auc,
@@ -241,7 +241,7 @@ def build_training_components(model, cfg):
 _TTA_FLIPS = [(), (2,), (3,), (4,), (2, 3), (2, 4), (3, 4), (2, 3, 4)]
 
 
-def run_inference(model, inputs, cfg, tta=None):
+def run_inference(model, inputs, cfg, tta=None, overlap=None):
     """Sliding-window inference, always returning LOGITS so every caller keeps
     its own sigmoid/threshold — there is exactly one contract here, no
     "sometimes probabilities" mode to trip over.
@@ -254,7 +254,13 @@ def run_inference(model, inputs, cfg, tta=None):
     `tta=None` defers to cfg.infer.tta_flips. The per-epoch validation loop
     passes tta=False explicitly: 8x inference on every epoch would cost more
     than the training step it is meant to be checking.
+
+    `overlap=None` defers to cfg.infer.sw_overlap (test, threshold tuning). The
+    per-epoch validation loop passes cfg.infer.val_sw_overlap, for the same
+    reason it skips TTA.
     """
+    sw_overlap = cfg.infer.sw_overlap if overlap is None else overlap
+
     def _sliding_window(x):
         def _compute():
             return sliding_window_inference(
@@ -262,7 +268,7 @@ def run_inference(model, inputs, cfg, tta=None):
                 roi_size=cfg.unetr.img_shape,
                 sw_batch_size=1,
                 predictor=model,
-                overlap=cfg.infer.sw_overlap,
+                overlap=sw_overlap,
                 mode=cfg.infer.sw_mode,
             )
 
@@ -318,12 +324,35 @@ def _recover_from_oom(optimizer=None, scaler=None):
     free_gpu_cache()
 
 
+def _loss_terms(loss_fn):
+    """The unweighted terms of loss_fn's most recent call as floats — empty for
+    a loss that does not record them (CombinedLoss does, in last_terms)."""
+    return {k: float(v) for k, v in (getattr(loss_fn, "last_terms", None) or {}).items()}
+
+
+def _patient_id(ds, index):
+    """Patient folder name of item `index`, or "" when the dataset does not
+    expose file paths (the synthetic test datasets)."""
+    try:
+        item = ds.data[index]
+        path = item.get("label") or item["image"][0]
+    except (AttributeError, IndexError, KeyError, TypeError):
+        return ""
+    return os.path.basename(os.path.dirname(str(path)))
+
+
 def train_one_epoch(model, train_loader, train_ds, optimizer, scaler, loss_fn, device, cfg, epoch,
-                     estimator=None, console=None, ema_model=None):
+                     estimator=None, console=None, ema_model=None, step_logger=None):
+    """One pass over train_loader; returns the mean total loss of the steps that
+    ran. `step_logger`, when given, is called once per completed step with a
+    TRAIN_STEPS_CSV_FIELDS row (run_training passes RunLogger.log_train_step)."""
     model.train()
     epoch_loss = 0
     step = 0
     oom_skips = 0
+    steps_per_epoch = len(train_loader)
+    # The scheduler steps once per epoch, so this is the LR of every step below.
+    lr = optimizer.param_groups[0]["lr"]
     pbar = tqdm(
         train_loader, total=len(train_loader), file=console, dynamic_ncols=True,
         desc=f"Epoch {epoch + 1}/{cfg.epoch} [train]", leave=False,
@@ -331,6 +360,8 @@ def train_one_epoch(model, train_loader, train_ds, optimizer, scaler, loss_fn, d
     for batch_data in pbar:
         step_start = time.time()
         inputs = labels = outputs = aux_z6 = aux_z3 = loss = None
+        loss_main = loss_z6 = loss_z3 = None
+        step_parts = {}
         oom_message = None
         try:
             inputs, labels = (
@@ -342,7 +373,8 @@ def train_one_epoch(model, train_loader, train_ds, optimizer, scaler, loss_fn, d
 
             with torch.amp.autocast('cuda', dtype=torch.bfloat16):
                 outputs, aux_z6, aux_z3 = model(inputs)
-                loss = combine_main_and_aux(loss_fn, outputs, aux_z6, aux_z3, labels, cfg)
+                loss, loss_main, loss_z6, loss_z3 = main_and_aux_losses(
+                    loss_fn, outputs, aux_z6, aux_z3, labels, cfg)
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
@@ -353,12 +385,18 @@ def train_one_epoch(model, train_loader, train_ds, optimizer, scaler, loss_fn, d
             if ema_model is not None:
                 ema_model.update_parameters(model)
             loss_value = loss.item()
+            if step_logger is not None:
+                step_parts = {
+                    "loss_main": loss_main.item(), "loss_aux_z6": loss_z6.item(),
+                    "loss_aux_z3": loss_z3.item(), **_loss_terms(loss_fn),
+                }
         except torch.cuda.OutOfMemoryError as exc:
             # Record and get out. The cleanup deliberately happens after the
             # handler exits — see _recover_from_oom on why doing it in here
             # frees almost nothing.
             oom_message = str(exc)
             inputs = labels = outputs = aux_z6 = aux_z3 = loss = None
+            loss_main = loss_z6 = loss_z3 = None
 
         if oom_message is not None:
             # A single unlucky batch must not cost the run. Drop it, clean up,
@@ -382,6 +420,14 @@ def train_one_epoch(model, train_loader, train_ds, optimizer, scaler, loss_fn, d
         step += 1
         epoch_loss += loss_value
 
+        if step_logger is not None:
+            step_logger({
+                "epoch": epoch + 1, "step": step,
+                "global_step": epoch * steps_per_epoch + step, "lr": lr,
+                "step_time_sec": time.time() - step_start,
+                "loss": loss_value, **step_parts,
+            })
+
         if estimator is not None:
             estimator.record_train_step(time.time() - step_start)
             pbar.set_postfix_str(f"loss={loss_value:.4f}  run_eta={estimator.eta_string()}")
@@ -392,7 +438,7 @@ def train_one_epoch(model, train_loader, train_ds, optimizer, scaler, loss_fn, d
         # batch. Without this the previous outputs/inputs stay referenced while
         # the next batch is allocated, so the peak carries one extra step's
         # worth of full-resolution decoder tensors for no reason.
-        del inputs, labels, outputs, aux_z6, aux_z3, loss
+        del inputs, labels, outputs, aux_z6, aux_z3, loss, loss_main, loss_z6, loss_z3
     pbar.close()
     if oom_skips:
         print(f"[OOM] epoch {epoch + 1}: {oom_skips} batch(es) skipped")
@@ -400,8 +446,47 @@ def train_one_epoch(model, train_loader, train_ds, optimizer, scaler, loss_fn, d
     return epoch_loss
 
 
+_CHANNELS = ("tc", "wt", "et")
+# Per-patient metrics in val_steps.csv, named as in METRICS_CSV_FIELDS.
+_VAL_STEP_METRICS = ("dice", "iou", "miou", "hd95", "sens", "spec", "f1", "auc")
+
+TRAIN_STEPS_CSV_FIELDS = [
+    "epoch", "step", "global_step", "lr", "step_time_sec",
+    "loss", "loss_main", "loss_aux_z6", "loss_aux_z3",
+    "loss_dice", "loss_focal_tversky", "loss_hausdorff", "hd_scale",
+]
+
+VAL_STEPS_CSV_FIELDS = [
+    "epoch", "sample_index", "patient", "step_time_sec",
+    "val_loss", "loss_dice", "loss_focal_tversky", "loss_hausdorff", "hd_scale",
+] + [key for metric in _VAL_STEP_METRICS
+     for key in (*(f"{metric}_{c}" for c in _CHANNELS), f"mean_{metric}")]
+
+
+def _val_step_row(epoch, sample_index, patient, step_time_sec, val_loss, loss_parts,
+                  sample_dice, sample_metrics, with_auc):
+    """One val_steps.csv row: this patient's loss and every per-region metric,
+    plus the mean over the regions that are finite (Dice is NaN for a region
+    absent from the ground truth, exactly as DiceMetric counts it)."""
+    row = {"epoch": epoch + 1, "sample_index": sample_index, "patient": patient,
+           "step_time_sec": step_time_sec, "val_loss": val_loss, **loss_parts}
+    for name, values in {"dice": sample_dice, **sample_metrics}.items():
+        if name == "auc" and not with_auc:
+            continue  # only computed every cfg.metrics.auc_every_n_epochs
+        values = np.asarray(values, dtype=np.float64)
+        for c, channel in enumerate(_CHANNELS):
+            row[f"{name}_{channel}"] = float(values[c])
+        finite = values[np.isfinite(values)]
+        row[f"mean_{name}"] = float(finite.mean()) if finite.size else float("nan")
+    return row
+
+
 def validate(model, val_loader, val_ds, loss_fn, dice_metric, dice_metric_batch, post_trans,
-             device, cfg, epoch, attention_cache, attention_dir, estimator=None, console=None):
+             device, cfg, epoch, attention_cache, attention_dir, estimator=None, console=None,
+             step_logger=None):
+    """The per-epoch validation pass; returns its metrics.csv row. `step_logger`,
+    when given, also gets one VAL_STEPS_CSV_FIELDS row per patient (run_training
+    passes RunLogger.log_val_step)."""
     model.eval()
     val_loss_epoch = 0.0
     val_steps = 0
@@ -416,6 +501,7 @@ def validate(model, val_loader, val_ds, loss_fn, dice_metric, dice_metric_batch,
     }
     sample_count = 0
     attention_saved = False
+    batch_size = getattr(val_loader, "batch_size", None) or 1
     compute_auc_this_epoch = ((epoch + 1) % cfg.metrics.auc_every_n_epochs == 0)
     attention_this_epoch = cfg.attention.enabled and ((epoch + 1) % cfg.attention.every_n_epochs == 0)
 
@@ -432,7 +518,7 @@ def validate(model, val_loader, val_ds, loss_fn, dice_metric, dice_metric_batch,
     )
     oom_skips = 0
     with torch.no_grad():
-        for val_data in pbar:
+        for val_index, val_data in enumerate(pbar):
             step_start = time.time()
             val_inputs = val_labels = val_outputs = None
             oom_message = None
@@ -443,9 +529,13 @@ def validate(model, val_loader, val_ds, loss_fn, dice_metric, dice_metric_batch,
                 )
                 # tta=False: the per-epoch loop runs every epoch, so 8x flip
                 # inference here would cost more than the training it monitors.
-                # Test/evaluate.py turn it on.
-                val_outputs = run_inference(model, val_inputs, cfg, tta=False)
-                val_loss_epoch += loss_fn(val_outputs, val_labels).item()
+                # Test/evaluate.py turn it on. The overlap is kept lower than
+                # the test pass's for the same reason (cfg.infer.val_sw_overlap).
+                val_outputs = run_inference(model, val_inputs, cfg, tta=False,
+                                            overlap=cfg.infer.get("val_sw_overlap"))
+                val_loss_value = loss_fn(val_outputs, val_labels).item()
+                val_loss_parts = _loss_terms(loss_fn)
+                val_loss_epoch += val_loss_value
                 val_steps += 1
                 # The raw probabilities are only read for AUC, which runs every
                 # cfg.metrics.auc_every_n_epochs epochs. Copying a whole
@@ -457,7 +547,10 @@ def validate(model, val_loader, val_ds, loss_fn, dice_metric, dice_metric_batch,
                 val_outputs_disc = [post_trans(i) for i in decollate_batch(val_outputs)]
                 val_labels_list = decollate_batch(val_labels)
                 dice_metric(y_pred=val_outputs_disc, y=val_labels)
-                dice_metric_batch(y_pred=val_outputs_disc, y=val_labels)
+                # The per-call return is this batch's per-patient Dice, exactly
+                # as the aggregate counts it (NaN where the ground truth is empty).
+                sample_dice = dice_metric_batch(
+                    y_pred=val_outputs_disc, y=val_labels).detach().cpu().numpy()
             except torch.cuda.OutOfMemoryError as exc:
                 oom_message = str(exc)
                 val_inputs = val_labels = val_outputs = None
@@ -480,23 +573,36 @@ def validate(model, val_loader, val_ds, loss_fn, dice_metric, dice_metric_batch,
                     )
                 continue
 
-            for pred_raw, pred, gt in zip(val_outputs_raw, val_outputs_disc, val_labels_list):
+            for b, (pred_raw, pred, gt) in enumerate(
+                    zip(val_outputs_raw, val_outputs_disc, val_labels_list)):
                 pred_np = pred.detach().cpu().numpy()
                 gt_np = gt.detach().cpu().numpy()
                 pred_prob_np = torch.sigmoid(pred_raw).numpy() if pred_raw is not None else None
+                sample_metrics = {name: np.zeros(3, dtype=np.float64) for name in metric_sums}
                 for c in range(3):
                     pred_c = pred_np[c] > 0.5
                     gt_c = gt_np[c] > 0.5
                     tp, fp, fn = compute_confusion(pred_c, gt_c)
-                    metric_sums["hd95"][c] += compute_hd95(pred_c, gt_c, cfg.metrics.voxel_spacing)
-                    metric_sums["sens"][c] += compute_sensitivity(tp, fn)
-                    metric_sums["iou"][c] += compute_iou(tp, fp, fn)
-                    metric_sums["miou"][c] += compute_miou(pred_c, gt_c)
-                    metric_sums["spec"][c] += compute_specificity(pred_c, gt_c)
-                    metric_sums["f1"][c] += compute_f1(tp, fp, fn)
+                    sample_metrics["hd95"][c] = compute_hd95(pred_c, gt_c, cfg.metrics.voxel_spacing)
+                    sample_metrics["sens"][c] = compute_sensitivity(tp, fn)
+                    sample_metrics["iou"][c] = compute_iou(tp, fp, fn)
+                    sample_metrics["miou"][c] = compute_miou(pred_c, gt_c)
+                    sample_metrics["spec"][c] = compute_specificity(pred_c, gt_c)
+                    sample_metrics["f1"][c] = compute_f1(tp, fp, fn)
                     if compute_auc_this_epoch:
-                        metric_sums["auc"][c] += compute_roc_auc(pred_prob_np[c], gt_c)
+                        sample_metrics["auc"][c] = compute_roc_auc(pred_prob_np[c], gt_c)
+                for name, values in sample_metrics.items():
+                    metric_sums[name] += values
                 sample_count += 1
+
+                if step_logger is not None:
+                    # val_loss is the batch mean, i.e. this patient's loss at
+                    # the pipeline's validation batch size of 1.
+                    index = val_index * batch_size + b
+                    step_logger(_val_step_row(
+                        epoch, index, _patient_id(val_ds, index), time.time() - step_start,
+                        val_loss_value, val_loss_parts, sample_dice[b], sample_metrics,
+                        compute_auc_this_epoch))
 
             if attention_this_epoch and not attention_saved:
                 # Validation volumes keep their per-patient cropped shape (no
@@ -692,6 +798,8 @@ def run_training(model, loaders, loss_fn, device, cfg, run_logger, resume_from=N
     attention_cache = register_attention_hook(eval_model) if cfg.attention.enabled else {}
 
     run_logger.open_metrics_csv(METRICS_CSV_FIELDS, resume_from_epoch=start_epoch)
+    run_logger.open_step_csvs(TRAIN_STEPS_CSV_FIELDS, VAL_STEPS_CSV_FIELDS,
+                              resume_from_epoch=start_epoch)
 
     training = True
 
@@ -706,6 +814,7 @@ def run_training(model, loaders, loss_fn, device, cfg, run_logger, resume_from=N
         epoch_loss = train_one_epoch(
             model, train_loader, train_ds, optimizer, scaler, loss_fn, device, cfg, epoch,
             estimator=estimator, console=run_logger.console, ema_model=ema_model,
+            step_logger=run_logger.log_train_step,
         )
         lr_scheduler.step()
 
@@ -729,6 +838,7 @@ def run_training(model, loaders, loss_fn, device, cfg, run_logger, resume_from=N
                 eval_model, val_loader, val_ds, loss_fn, dice_metric, dice_metric_batch,
                 post_trans, device, cfg, epoch, attention_cache, run_logger.attention_dir,
                 estimator=estimator, console=run_logger.console,
+                step_logger=run_logger.log_val_step,
             )
             row.update(val_metrics)
             metric = val_metrics["mean_dice"]

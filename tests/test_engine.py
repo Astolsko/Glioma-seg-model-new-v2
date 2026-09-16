@@ -16,7 +16,7 @@ pytest.importorskip("monai")
 
 from utils.engine import (
     build_training_components, build_model, run_inference, train_one_epoch,
-    validate, METRICS_CSV_FIELDS,
+    validate, METRICS_CSV_FIELDS, TRAIN_STEPS_CSV_FIELDS, VAL_STEPS_CSV_FIELDS,
 )
 from utils.losses import build_loss_fn
 
@@ -217,3 +217,66 @@ def test_validate_with_attention_enabled_does_not_crash_on_noncubic_shape(
     validate(model, loader, _FakeValDS(), loss_fn, dice_metric, dice_metric_batch,
              post_trans, device, cfg, epoch=0, attention_cache=attention_cache,
              attention_dir=str(tmp_path))
+
+
+def test_run_inference_overlap_argument_overrides_the_config(tiny_unetr_kwargs, monkeypatch):
+    """validate() passes cfg.infer.val_sw_overlap while test/tuning use
+    cfg.infer.sw_overlap. More overlap means more windows, i.e. more passes."""
+    from config import cfg
+    monkeypatch.setattr(cfg, "val_amp", False, raising=True)
+    x = torch.randn(1, 4, *(2 * s for s in tiny_unetr_kwargs["img_shape"]))
+
+    low, high = _ConstantModel(0.5), _ConstantModel(0.5)
+    with torch.no_grad():
+        run_inference(low, x, cfg, tta=False, overlap=0.0)
+        run_inference(high, x, cfg, tta=False, overlap=0.75)
+
+    assert high.calls > low.calls
+
+
+@requires_cuda
+def test_train_one_epoch_logs_one_csv_row_per_step(tiny_unetr, tiny_unetr_kwargs, device):
+    from config import cfg
+    model = tiny_unetr.to(device)
+    dataset = _TinyDataset(3, tiny_unetr_kwargs["input_dim"], tiny_unetr_kwargs["output_dim"],
+                           tiny_unetr_kwargs["img_shape"])
+    loader = torch.utils.data.DataLoader(dataset, batch_size=1)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    rows = []
+
+    epoch_loss = train_one_epoch(model, loader, dataset, optimizer, torch.amp.GradScaler("cuda"),
+                                 build_loss_fn(cfg), device, cfg, epoch=2,
+                                 step_logger=rows.append)
+
+    assert [r["step"] for r in rows] == [1, 2, 3]
+    assert [r["global_step"] for r in rows] == [7, 8, 9]
+    for row in rows:
+        assert set(row) <= set(TRAIN_STEPS_CSV_FIELDS)
+        assert row["epoch"] == 3
+        # total = main head + weighted aux heads, and aux losses are non-negative
+        assert row["loss"] >= row["loss_main"] - 1e-6
+    assert epoch_loss == pytest.approx(sum(r["loss"] for r in rows) / len(rows))
+
+
+@requires_cuda
+def test_validate_logs_one_row_per_patient_that_the_epoch_row_averages(
+        tiny_unetr, tiny_unetr_kwargs, device, monkeypatch):
+    from config import cfg
+    monkeypatch.setattr(cfg.attention, "enabled", False, raising=True)
+    model = tiny_unetr.to(device)
+    dataset = _TinyDataset(2, tiny_unetr_kwargs["input_dim"], tiny_unetr_kwargs["output_dim"],
+                           tiny_unetr_kwargs["img_shape"])
+    loader = torch.utils.data.DataLoader(dataset, batch_size=1)
+    _, _, dice_metric, dice_metric_batch, post_trans, _, _ = build_training_components(model, cfg)
+    rows = []
+
+    val_metrics = validate(model, loader, dataset, build_loss_fn(cfg), dice_metric,
+                           dice_metric_batch, post_trans, device, cfg, epoch=0,
+                           attention_cache={}, attention_dir=None, step_logger=rows.append)
+
+    assert [r["sample_index"] for r in rows] == [0, 1]
+    for row in rows:
+        assert set(row) <= set(VAL_STEPS_CSV_FIELDS)
+        assert row["epoch"] == 1
+    for key in ("val_loss", "dice_tc", "dice_wt", "dice_et", "iou_tc", "hd95_et", "sens_wt"):
+        assert val_metrics[key] == pytest.approx(sum(r[key] for r in rows) / len(rows), abs=1e-5)

@@ -86,6 +86,9 @@ def test_run_training_resumes_and_metrics_csv_stays_continuous(
 
     # No repeated and no skipped epochs across the seam.
     assert _read_epochs(metrics_csv) == [1, 2, 3, 4]
+    # The per-step CSVs follow the same seam: 2 train and 2 val samples per epoch.
+    for name in ("train_steps.csv", "val_steps.csv"):
+        assert _read_epochs(os.path.join(first_dir, name)) == [1, 1, 2, 2, 3, 3, 4, 4], name
     assert 1 <= best_epoch <= 4
     assert best > -1
 
@@ -152,3 +155,27 @@ def test_run_logger_logs_the_traceback_into_log_txt(tmp_path):
     assert "RUN FAILED: RuntimeError" in text
     assert "simulated CUDA out of memory" in text
     assert "Traceback" in text
+
+
+def test_step_csvs_drop_rows_past_the_resume_point(tmp_path):
+    """The metrics.csv rule applies to the per-step CSVs too: the steps of an
+    epoch whose checkpoint never landed get re-run, so their old rows must go."""
+    train_fields, val_fields = ["epoch", "step", "loss"], ["epoch", "sample_index", "val_loss"]
+    logger = RunLogger(run_name="steps", base_dir=str(tmp_path), resume=True)
+    logger.open_step_csvs(train_fields, val_fields)
+    for e in range(1, 4):
+        for s in range(1, 3):
+            logger.log_train_step({"epoch": e, "step": s, "loss": 0.1 * s})
+        logger.log_val_step({"epoch": e, "sample_index": 0, "val_loss": 0.2})
+    logger._train_steps_file.close()
+    logger._val_steps_file.close()
+
+    # Checkpoint only made it to epoch 2 -> epoch 3's rows must be discarded.
+    logger2 = RunLogger(run_name="steps", base_dir=str(tmp_path), resume=True)
+    logger2.open_step_csvs(train_fields, val_fields, resume_from_epoch=2)
+    logger2.log_train_step({"epoch": 3, "step": 1, "loss": 0.99})
+    logger2._train_steps_file.close()
+    logger2._val_steps_file.close()
+
+    assert _read_epochs(logger.train_steps_csv_path) == [1, 1, 2, 2, 3]
+    assert _read_epochs(logger.val_steps_csv_path) == [1, 2]

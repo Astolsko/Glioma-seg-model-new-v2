@@ -153,3 +153,52 @@ def test_brats_dataset_split_changes_with_different_seed(make_brats_root):
     idx_seed1 = BratsDataset(root_dir=root, section="training", val_frac=0.15, test_frac=0.10,
                               seed=1, cache_rate=0.0).get_indices()
     assert not np.array_equal(idx_seed0, idx_seed1)
+
+
+# ---------------------------------------------------------------------------
+# Deliberate leak (cfg.data.leak) — assignment demonstration
+# ---------------------------------------------------------------------------
+
+def test_patient_leak_trains_on_every_validation_patient_but_no_test_patient(make_brats_root):
+    root = make_brats_root(num_patients=20)
+    common = dict(root_dir=root, val_frac=0.15, test_frac=0.10, seed=0, cache_rate=0.0)
+
+    leaked_train = set(BratsDataset(section="training", leak="patient", **common)
+                       .get_indices().tolist())
+    honest_train = set(BratsDataset(section="training", **common).get_indices().tolist())
+    val_idx = set(BratsDataset(section="validation", **common).get_indices().tolist())
+    test_idx = set(BratsDataset(section="test", **common).get_indices().tolist())
+
+    assert val_idx
+    assert leaked_train == honest_train | val_idx
+    assert leaked_train.isdisjoint(test_idx)
+
+
+def test_leak_only_changes_the_training_section(make_brats_root):
+    root = make_brats_root(num_patients=20)
+    common = dict(root_dir=root, val_frac=0.15, test_frac=0.10, seed=0, cache_rate=0.0)
+    for section in ("validation", "test"):
+        np.testing.assert_array_equal(
+            BratsDataset(section=section, leak="patient", **common).get_indices(),
+            BratsDataset(section=section, **common).get_indices())
+
+
+def test_unknown_leak_mode_is_rejected(make_brats_root):
+    with pytest.raises(ValueError):
+        BratsDataset(root_dir=make_brats_root(num_patients=5), section="training",
+                     cache_rate=0.0, leak="global")
+
+
+@pytest.mark.parametrize("name, leak, allowed", [
+    ("v5-mamba-leak-demo", "patient", True),
+    ("v5-mamba-60ep", "patient", False),
+    (None, "patient", False),
+    ("v5-mamba-60ep", None, True),
+])
+def test_a_leaked_run_must_say_leak_in_its_name(name, leak, allowed):
+    from utils.dataloader import require_leak_label
+    if allowed:
+        require_leak_label(name, leak)
+    else:
+        with pytest.raises(SystemExit):
+            require_leak_label(name, leak)

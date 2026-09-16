@@ -1,0 +1,1194 @@
+{
+  "cam": {
+    "s0_TC_decoder9_upsampler_hires": {
+      "mass_in_tumor": 0.2827709913253784,
+      "peak_value": 1.0
+    },
+    "s0_TC_decoder9_upsampler_grad": {
+      "mass_in_tumor": 9.149542989916881e-08,
+      "peak_value": 1.0
+    },
+    "s0_TC_decoder6_upsampler_hires": {
+      "mass_in_tumor": 0.4309133291244507,
+      "peak_value": 1.0
+    },
+    "s0_TC_decoder6_upsampler_grad": {
+      "mass_in_tumor": 0.9386807084083557,
+      "peak_value": 1.0
+    },
+    "s0_TC_decoder3_upsampler_hires": {
+      "mass_in_tumor": 0.6313623189926147,
+      "peak_value": 1.0
+    },
+    "s0_TC_decoder3_upsampler_grad": {
+      "mass_in_tumor": 0.9844459295272827,
+      "peak_value": 1.0
+    },
+    "s0_TC_decoder0_header1_hires": {
+      "mass_in_tumor": 1.0000001192092896,
+      "peak_value": 1.0
+    },
+    "s0_TC_decoder0_header1_grad": {
+      "mass_in_tumor": 0.9827384352684021,
+      "peak_value": 1.0
+    },
+    "s0_WT_decoder9_upsampler_hires": {
+      "mass_in_tumor": 0.2783586084842682,
+      "peak_value": 1.0
+    },
+    "s0_WT_decoder9_upsampler_grad": {
+      "mass_in_tumor": 0.3275966942310333,
+      "peak_value": 1.0
+    },
+    "s0_WT_decoder6_upsampler_hires": {
+      "mass_in_tumor": 0.3379509449005127,
+      "peak_value": 1.0
+    },
+    "s0_WT_decoder6_upsampler_grad": {
+      "mass_in_tumor": 0.9775611758232117,
+      "peak_value": 1.0
+    },
+    "s0_WT_decoder3_upsampler_hires": {
+      "mass_in_tumor": 0.03946072235703468,
+      "peak_value": 1.0
+    },
+    "s0_WT_decoder3_upsampler_grad": {
+      "mass_in_tumor": 0.9888978004455566,
+      "peak_value": 1.0
+    },
+    "s0_WT_decoder0_header1_hires": {
+      "mass_in_tumor": 1.0000003576278687,
+      "peak_value": 1.0
+    },
+    "s0_WT_decoder0_header1_grad": {
+      "mass_in_tumor": 0.9786244034767151,
+      "peak_value": 1.0
+    },
+    "s0_ET_decoder9_upsampler_hires": {
+      "mass_in_tumor": 0.22050294280052185,
+      "peak_value": 1.0
+    },
+    "s0_ET_decoder9_upsampler_grad": {
+      "mass_in_tumor": 1.3909645701914997e-07,
+      "peak_value": 1.0
+    },
+    "s0_ET_decoder6_upsampler_hires": {
+      "mass_in_tumor": 0.5304182767868042,
+      "peak_value": 1.0
+    },
+    "s0_ET_decoder6_upsampler_grad": {
+      "mass_in_tumor": 0.7073037624359131,
+      "peak_value": 1.0
+    },
+    "s0_ET_decoder3_upsampler_hires": {
+      "mass_in_tumor": 0.6908134818077087,
+      "peak_value": 1.0
+    },
+    "s0_ET_decoder3_upsampler_grad": {
+      "mass_in_tumor": 0.7849861979484558,
+      "peak_value": 1.0
+    },
+    "s0_ET_decoder0_header1_hires": {
+      "mass_in_tumor": 1.0000001192092896,
+      "peak_value": 1.0
+    },
+    "s0_ET_decoder0_header1_grad": {
+      "mass_in_tumor": 0.9103603959083557,
+      "peak_value": 1.0
+    },
+    "s1_TC_decoder9_upsampler_hires": {
+      "mass_in_tumor": 0.24491962790489197,
+      "peak_value": 1.0
+    },
+    "s1_TC_decoder9_upsampler_grad": {
+      "mass_in_tumor": 0.0,
+      "peak_value": 1.0
+    },
+    "s1_TC_decoder6_upsampler_hires": {
+      "mass_in_tumor": 0.4373498857021332,
+      "peak_value": 1.0
+    },
+    "s1_TC_decoder6_upsampler_grad": {
+      "mass_in_tumor": 0.9368637800216675,
+      "peak_value": 1.0
+    },
+    "s1_TC_decoder3_upsampler_hires": {
+      "mass_in_tumor": 0.5826282501220703,
+      "peak_value": 1.0
+    },
+    "s1_TC_decoder3_upsampler_grad": {
+      "mass_in_tumor": 0.9777858853340149,
+      "peak_value": 1.0
+    },
+    "s1_TC_decoder0_header1_hires": {
+      "mass_in_tumor": 0.9999999403953552,
+      "peak_value": 1.0
+    },
+    "s1_TC_decoder0_header1_grad": {
+      "mass_in_tumor": 0.9603859186172485,
+      "peak_value": 1.0
+    },
+    "s1_WT_decoder9_upsampler_hires": {
+      "mass_in_tumor": 0.46313437819480896,
+      "peak_value": 1.0
+    },
+    "s1_WT_decoder9_upsampler_grad": {
+      "mass_in_tumor": 0.12400563806295395,
+      "peak_value": 1.0
+    },
+    "s1_WT_decoder6_upsampler_hires": {
+      "mass_in_tumor": 0.33163750171661377,
+      "peak_value": 1.0
+    },
+    "s1_WT_decoder6_upsampler_grad": {
+      "mass_in_tumor": 0.9718812704086304,
+      "peak_value": 1.0
+    },
+    "s1_WT_decoder3_upsampler_hires": {
+      "mass_in_tumor": 0.03788396716117859,
+      "peak_value": 1.0
+    },
+    "s1_WT_decoder3_upsampler_grad": {
+      "mass_in_tumor": 0.5605835914611816,
+      "peak_value": 1.0
+    },
+    "s1_WT_decoder0_header1_hires": {
+      "mass_in_tumor": 0.9999998807907104,
+      "peak_value": 1.0
+    },
+    "s1_WT_decoder0_header1_grad": {
+      "mass_in_tumor": 0.9741285443305969,
+      "peak_value": 1.0
+    },
+    "s1_ET_decoder9_upsampler_hires": {
+      "mass_in_tumor": 0.10929743200540543,
+      "peak_value": 1.0
+    },
+    "s1_ET_decoder9_upsampler_grad": {
+      "mass_in_tumor": 0.0,
+      "peak_value": 1.0
+    },
+    "s1_ET_decoder6_upsampler_hires": {
+      "mass_in_tumor": 0.45258593559265137,
+      "peak_value": 1.0
+    },
+    "s1_ET_decoder6_upsampler_grad": {
+      "mass_in_tumor": 0.673474907875061,
+      "peak_value": 1.0
+    },
+    "s1_ET_decoder3_upsampler_hires": {
+      "mass_in_tumor": 0.5528888702392578,
+      "peak_value": 1.0
+    },
+    "s1_ET_decoder3_upsampler_grad": {
+      "mass_in_tumor": 0.7585058808326721,
+      "peak_value": 1.0
+    },
+    "s1_ET_decoder0_header1_hires": {
+      "mass_in_tumor": 0.9999998807907104,
+      "peak_value": 1.0
+    },
+    "s1_ET_decoder0_header1_grad": {
+      "mass_in_tumor": 0.7541407942771912,
+      "peak_value": 1.0
+    },
+    "s2_TC_decoder9_upsampler_hires": {
+      "mass_in_tumor": 0.6026178598403931,
+      "peak_value": 1.0
+    },
+    "s2_TC_decoder9_upsampler_grad": {
+      "mass_in_tumor": 0.004955269396305084,
+      "peak_value": 1.0
+    },
+    "s2_TC_decoder6_upsampler_hires": {
+      "mass_in_tumor": 0.38152816891670227,
+      "peak_value": 1.0
+    },
+    "s2_TC_decoder6_upsampler_grad": {
+      "mass_in_tumor": 0.9318673014640808,
+      "peak_value": 1.0
+    },
+    "s2_TC_decoder3_upsampler_hires": {
+      "mass_in_tumor": 0.9242508411407471,
+      "peak_value": 1.0
+    },
+    "s2_TC_decoder3_upsampler_grad": {
+      "mass_in_tumor": 0.9802616834640503,
+      "peak_value": 1.0
+    },
+    "s2_TC_decoder0_header1_hires": {
+      "mass_in_tumor": 1.000000238418579,
+      "peak_value": 1.0
+    },
+    "s2_TC_decoder0_header1_grad": {
+      "mass_in_tumor": 0.9800253510475159,
+      "peak_value": 1.0
+    },
+    "s2_WT_decoder9_upsampler_hires": {
+      "mass_in_tumor": 0.3994210362434387,
+      "peak_value": 1.0
+    },
+    "s2_WT_decoder9_upsampler_grad": {
+      "mass_in_tumor": 0.02092229202389717,
+      "peak_value": 1.0
+    },
+    "s2_WT_decoder6_upsampler_hires": {
+      "mass_in_tumor": 0.5052869319915771,
+      "peak_value": 1.0
+    },
+    "s2_WT_decoder6_upsampler_grad": {
+      "mass_in_tumor": 0.9981033205986023,
+      "peak_value": 1.0
+    },
+    "s2_WT_decoder3_upsampler_hires": {
+      "mass_in_tumor": 0.012827378697693348,
+      "peak_value": 1.0
+    },
+    "s2_WT_decoder3_upsampler_grad": {
+      "mass_in_tumor": 1.0,
+      "peak_value": 1.0
+    },
+    "s2_WT_decoder0_header1_hires": {
+      "mass_in_tumor": 1.0,
+      "peak_value": 1.0
+    },
+    "s2_WT_decoder0_header1_grad": {
+      "mass_in_tumor": 0.9891631007194519,
+      "peak_value": 1.0
+    },
+    "s2_ET_decoder9_upsampler_hires": {
+      "mass_in_tumor": 0.0,
+      "peak_value": 1.0
+    },
+    "s2_ET_decoder9_upsampler_grad": {
+      "mass_in_tumor": 0.0,
+      "peak_value": 1.0
+    },
+    "s2_ET_decoder6_upsampler_hires": {
+      "mass_in_tumor": 0.0,
+      "peak_value": 1.0
+    },
+    "s2_ET_decoder6_upsampler_grad": {
+      "mass_in_tumor": 0.0,
+      "peak_value": 0.0
+    },
+    "s2_ET_decoder3_upsampler_hires": {
+      "mass_in_tumor": 0.0,
+      "peak_value": 1.0
+    },
+    "s2_ET_decoder3_upsampler_grad": {
+      "mass_in_tumor": 0.0,
+      "peak_value": 1.0
+    },
+    "s2_ET_decoder0_header1_hires": {
+      "mass_in_tumor": 0.0,
+      "peak_value": 1.0
+    },
+    "s2_ET_decoder0_header1_grad": {
+      "mass_in_tumor": 0.0,
+      "peak_value": 1.0
+    }
+  },
+  "modality": {
+    "baseline": [
+      0.9124558846252299,
+      0.9287315703526762,
+      0.7698087797103295
+    ],
+    "FLAIR": [
+      0.680016210721385,
+      0.5369938669799202,
+      0.6481403496749368
+    ],
+    "T1": [
+      0.8008907902482628,
+      0.82497119098383,
+      0.6581680701894974
+    ],
+    "T1ce": [
+      0.3079925668326396,
+      0.8742530863518149,
+      0.1021297089423935
+    ],
+    "T2": [
+      0.8702129263284437,
+      0.9100768600339821,
+      0.7318796247640496
+    ],
+    "delta": {
+      "FLAIR": [
+        -0.2324396739038449,
+        -0.39173770337275593,
+        -0.12166843003539263
+      ],
+      "T1": [
+        -0.11156509437696704,
+        -0.10376037936884619,
+        -0.11164070952083205
+      ],
+      "T1ce": [
+        -0.6044633177925902,
+        -0.054478484000861305,
+        -0.667679070767936
+      ],
+      "T2": [
+        -0.04224295829678615,
+        -0.018654710318694034,
+        -0.03792915494627991
+      ]
+    }
+  },
+  "uncertainty": {
+    "s0_TC": {
+      "dice_mc_mean": 0.9445976508353396,
+      "retention_curve": [
+        0.9445976508353396,
+        0.954507567449002,
+        0.9730736762437051,
+        0.9764979639325189,
+        0.9794512585014241,
+        0.9815616016725224,
+        0.9825559457812092
+      ],
+      "retention_fractions": [
+        0.0,
+        0.001,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1
+      ],
+      "mean_entropy": 0.000628732203040272,
+      "mean_epistemic_std": 0.0002653003321029246,
+      "n_dropout_layers": 15
+    },
+    "s0_WT": {
+      "dice_mc_mean": 0.8477787448581221,
+      "retention_curve": [
+        0.8477787448581221,
+        0.8492970281984674,
+        0.8551289009992241,
+        0.8658413551716728,
+        0.8874863857011995,
+        0.923562214836929,
+        0.9354116851520073
+      ],
+      "retention_fractions": [
+        0.0,
+        0.001,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1
+      ],
+      "mean_entropy": 0.005109338089823723,
+      "mean_epistemic_std": 0.002155648311600089,
+      "n_dropout_layers": 15
+    },
+    "s0_ET": {
+      "dice_mc_mean": 0.8566128394611198,
+      "retention_curve": [
+        0.8566128394611198,
+        0.8813590964249043,
+        0.9469852824814052,
+        0.9637127578304049,
+        0.9665912927163286,
+        0.9696776456333897,
+        0.9720741710018191
+      ],
+      "retention_fractions": [
+        0.0,
+        0.001,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1
+      ],
+      "mean_entropy": 0.0009383538854308426,
+      "mean_epistemic_std": 0.0004076035984326154,
+      "n_dropout_layers": 15
+    },
+    "s1_TC": {
+      "dice_mc_mean": 0.8958415841584159,
+      "retention_curve": [
+        0.8958415841584159,
+        0.9411607560275161,
+        0.9510713570522662,
+        0.9523745997865528,
+        0.9540697286847544,
+        0.955860781437525,
+        0.9572695153656423
+      ],
+      "retention_fractions": [
+        0.0,
+        0.001,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1
+      ],
+      "mean_entropy": 0.0002246807998744771,
+      "mean_epistemic_std": 0.00013196431973483413,
+      "n_dropout_layers": 15
+    },
+    "s1_WT": {
+      "dice_mc_mean": 0.9287886111674177,
+      "retention_curve": [
+        0.9287886111674177,
+        0.9369258839813767,
+        0.9644956501293205,
+        0.9689969795139052,
+        0.9711657305568159,
+        0.9731006224390855,
+        0.9741055791843883
+      ],
+      "retention_fractions": [
+        0.0,
+        0.001,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1
+      ],
+      "mean_entropy": 0.0009120425675064325,
+      "mean_epistemic_std": 0.0004435620503500104,
+      "n_dropout_layers": 15
+    },
+    "s1_ET": {
+      "dice_mc_mean": 0.7482413131528459,
+      "retention_curve": [
+        0.7482413131528459,
+        0.8212335927517714,
+        0.8451443569553806,
+        0.8488260661236224,
+        0.852502406159769,
+        0.855487142339732,
+        0.8567629638583344
+      ],
+      "retention_fractions": [
+        0.0,
+        0.001,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1
+      ],
+      "mean_entropy": 0.0002386347478022799,
+      "mean_epistemic_std": 0.0001314694236498326,
+      "n_dropout_layers": 15
+    },
+    "s2_TC": {
+      "dice_mc_mean": 0.8905570385225132,
+      "retention_curve": [
+        0.8905570385225132,
+        0.8937784728360645,
+        0.9104709685339007,
+        0.9292183241009409,
+        0.9511659954778374,
+        0.9653101802757158,
+        0.9930078056906002
+      ],
+      "retention_fractions": [
+        0.0,
+        0.001,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1
+      ],
+      "mean_entropy": 0.003894765628501773,
+      "mean_epistemic_std": 0.0019480619812384248,
+      "n_dropout_layers": 15
+    },
+    "s2_WT": {
+      "dice_mc_mean": 0.965877476572787,
+      "retention_curve": [
+        0.965877476572787,
+        0.9674015954103088,
+        0.9738155257557286,
+        0.9812118159155785,
+        0.9902072174430557,
+        0.9935266421385751,
+        0.9963165600678123
+      ],
+      "retention_fractions": [
+        0.0,
+        0.001,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1
+      ],
+      "mean_entropy": 0.004595938138663769,
+      "mean_epistemic_std": 0.0017847917042672634,
+      "n_dropout_layers": 15
+    },
+    "s2_ET": {
+      "dice_mc_mean": 0.0,
+      "retention_curve": [
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "retention_fractions": [
+        0.0,
+        0.001,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1
+      ],
+      "mean_entropy": 9.239324754162226e-06,
+      "mean_epistemic_std": 1.4489820614471682e-06,
+      "n_dropout_layers": 15
+    }
+  },
+  "rollout": {
+    "s0": {
+      "TC": 0.6644099354743958,
+      "WT": 0.5729555487632751,
+      "ET": 0.6655505299568176
+    },
+    "s1": {
+      "TC": 0.7342678904533386,
+      "WT": 0.698982834815979,
+      "ET": 0.7332623600959778
+    },
+    "s2": {
+      "TC": 0.6785688400268555,
+      "WT": 0.6262242794036865,
+      "ET": null
+    }
+  },
+  "faithful": {
+    "s0_TC": {
+      "hires": {
+        "deletion_curve": [
+          0.9441907290952333,
+          0.02532575821815201,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.009948422455315372,
+        "localization": {
+          "inside_tumor": 0.4134760881451623,
+          "peritumoral": 0.03200539145251326,
+          "elsewhere": 0.5545185204023244
+        }
+      },
+      "grad": {
+        "deletion_curve": [
+          0.9441907290952333,
+          0.025606240461251484,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.009954032100177363,
+        "localization": {
+          "inside_tumor": 0.413336215556375,
+          "peritumoral": 0.04539501290642524,
+          "elsewhere": 0.5412687715371998
+        }
+      },
+      "rollout": {
+        "deletion_curve": [
+          0.9441907290952333,
+          0.9423065676355342,
+          0.9132062936007006,
+          0.6169179261896929,
+          0.3521989237335313,
+          0.018661901925749454,
+          0.0
+        ],
+        "deletion_auc": 0.17446432381319596,
+        "localization": {
+          "inside_tumor": 0.20385794031255167,
+          "peritumoral": 0.136223185788945,
+          "elsewhere": 0.6599188738985033
+        }
+      },
+      "random": {
+        "deletion_curve": [
+          0.9441907290952333,
+          0.9441136987100917,
+          0.9438005430181298,
+          0.9434447300771208,
+          0.9425865294667914,
+          0.9396897997478524,
+          0.9264357188660394
+        ],
+        "deletion_auc": 0.9367463963710204
+      }
+    },
+    "s0_WT": {
+      "hires": {
+        "deletion_curve": [
+          0.8439490214060601,
+          0.7672261775113072,
+          0.6499086119772067,
+          0.10343426383125438,
+          0.06826498812058379,
+          0.087086709562395,
+          0.012670990067452858
+        ],
+        "deletion_auc": 0.10693082841315679,
+        "localization": {
+          "inside_tumor": 1.0,
+          "peritumoral": 0.0,
+          "elsewhere": 0.0
+        }
+      },
+      "grad": {
+        "deletion_curve": [
+          0.8439490214060601,
+          0.7670765424630549,
+          0.6493095016702828,
+          0.1009392285703679,
+          0.07152504911591355,
+          0.08966945911491532,
+          0.02472810679861863
+        ],
+        "deletion_auc": 0.1118435124687012,
+        "localization": {
+          "inside_tumor": 0.9946848416260824,
+          "peritumoral": 0.005315158373917577,
+          "elsewhere": 0.0
+        }
+      },
+      "rollout": {
+        "deletion_curve": [
+          0.8439490214060601,
+          0.830428126640881,
+          0.8093754602199993,
+          0.704712655054104,
+          0.5485389128174663,
+          0.3820913480238353,
+          0.18755321488381535
+        ],
+        "deletion_auc": 0.4051834241573051,
+        "localization": {
+          "inside_tumor": 0.3942118179621835,
+          "peritumoral": 0.2455526874610582,
+          "elsewhere": 0.36023549457675824
+        }
+      },
+      "random": {
+        "deletion_curve": [
+          0.8439490214060601,
+          0.842860373009679,
+          0.841831756438227,
+          0.8375706786251651,
+          0.8306727077425133,
+          0.8109154661178444,
+          0.6721957252132853
+        ],
+        "deletion_auc": 0.7766014323942968
+      }
+    },
+    "s0_ET": {
+      "hires": {
+        "deletion_curve": [
+          0.8559788391961327,
+          0.0007645747053201656,
+          0.003175207976122436,
+          0.0020336828725770577,
+          0.0011436558866509943,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.009036331217916442,
+        "localization": {
+          "inside_tumor": 0.18216497336062967,
+          "peritumoral": 0.09471917398878477,
+          "elsewhere": 0.7231158526505855
+        }
+      },
+      "grad": {
+        "deletion_curve": [
+          0.8559788391961327,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.008559788391961327,
+        "localization": {
+          "inside_tumor": 0.18208867922129116,
+          "peritumoral": 0.12650839871317218,
+          "elsewhere": 0.6914029220655367
+        }
+      },
+      "rollout": {
+        "deletion_curve": [
+          0.8559788391961327,
+          0.8534790706194852,
+          0.8206535613990299,
+          0.5605223505775992,
+          0.2951225806451613,
+          0.01320551076122151,
+          0.0
+        ],
+        "deletion_auc": 0.15284789170778296,
+        "localization": {
+          "inside_tumor": 0.09218875170072352,
+          "peritumoral": 0.2377834009384179,
+          "elsewhere": 0.6700278473608585
+        }
+      },
+      "random": {
+        "deletion_curve": [
+          0.8559788391961327,
+          0.8562479092540218,
+          0.8551518471182521,
+          0.853887399463807,
+          0.8494958753437214,
+          0.8410955524026895,
+          0.7882835228775457
+        ],
+        "deletion_auc": 0.8285494715447741
+      }
+    },
+    "s1_TC": {
+      "hires": {
+        "deletion_curve": [
+          0.897821336335342,
+          0.03262955854126679,
+          0.03337147215865751,
+          0.03277751310147689,
+          0.034308779011099896,
+          0.00853450377956596,
+          0.0
+        ],
+        "deletion_auc": 0.022147982832134577,
+        "localization": {
+          "inside_tumor": 0.08683544625713668,
+          "peritumoral": 0.023142555599354044,
+          "elsewhere": 0.8900219981435092
+        }
+      },
+      "grad": {
+        "deletion_curve": [
+          0.897821336335342,
+          0.027980180705333722,
+          0.02895752895752896,
+          0.026087802978681983,
+          0.028324892140311385,
+          0.009026591851671139,
+          0.0
+        ],
+        "deletion_auc": 0.020642512935770976,
+        "localization": {
+          "inside_tumor": 0.08683544625713668,
+          "peritumoral": 0.030695675393868496,
+          "elsewhere": 0.8824688783489948
+        }
+      },
+      "rollout": {
+        "deletion_curve": [
+          0.897821336335342,
+          0.8975835815954982,
+          0.896423347959048,
+          0.8084857351865399,
+          0.16799904545996897,
+          0.0013116474291710388,
+          0.0
+        ],
+        "deletion_auc": 0.15319019351921226,
+        "localization": {
+          "inside_tumor": 0.01736963238940529,
+          "peritumoral": 0.043538522182521015,
+          "elsewhere": 0.9390918454280737
+        }
+      },
+      "random": {
+        "deletion_curve": [
+          0.897821336335342,
+          0.8980646871686108,
+          0.8984162746007555,
+          0.8982712765957447,
+          0.9013408044826896,
+          0.8990014074123718,
+          0.8860690033609987
+        ],
+        "deletion_auc": 0.8953602448640673
+      }
+    },
+    "s1_WT": {
+      "hires": {
+        "deletion_curve": [
+          0.9282120198768634,
+          0.5673141047015672,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.02062840229279998,
+        "localization": {
+          "inside_tumor": 0.37774499955495083,
+          "peritumoral": 0.05676283966786618,
+          "elsewhere": 0.565492160777183
+        }
+      },
+      "grad": {
+        "deletion_curve": [
+          0.9282120198768634,
+          0.5716012840288489,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.020714145879345613,
+        "localization": {
+          "inside_tumor": 0.37774499955495083,
+          "peritumoral": 0.07423419757638951,
+          "elsewhere": 0.5480208028686596
+        }
+      },
+      "rollout": {
+        "deletion_curve": [
+          0.9282120198768634,
+          0.9255845359044015,
+          0.9179868485996784,
+          0.8427240537660284,
+          0.5806054952510177,
+          0.28182533438237606,
+          0.0
+        ],
+        "deletion_auc": 0.33175216720272915,
+        "localization": {
+          "inside_tumor": 0.0656511069008049,
+          "peritumoral": 0.08467377897587834,
+          "elsewhere": 0.8496751141233168
+        }
+      },
+      "random": {
+        "deletion_curve": [
+          0.9282120198768634,
+          0.9281591666275633,
+          0.9273490879458409,
+          0.9250436890911095,
+          0.9222327941642879,
+          0.9121824947419511,
+          0.8309268084501031
+        ],
+        "deletion_auc": 0.8914287217328969
+      }
+    },
+    "s1_ET": {
+      "hires": {
+        "deletion_curve": [
+          0.7533555245355954,
+          0.0936425163652502,
+          0.10481212920237311,
+          0.08951283897288217,
+          0.09557053442465094,
+          0.018177787630237197,
+          0.0
+        ],
+        "deletion_auc": 0.04236661307437898,
+        "localization": {
+          "inside_tumor": 0.04468293427259896,
+          "peritumoral": 0.02093002555853668,
+          "elsewhere": 0.9343870401688643
+        }
+      },
+      "grad": {
+        "deletion_curve": [
+          0.7533555245355954,
+          0.012057272042200452,
+          0.011987263532496722,
+          0.0076731248801074235,
+          0.009196247930844215,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.010247478407535059,
+        "localization": {
+          "inside_tumor": 0.04468293427259896,
+          "peritumoral": 0.04442862047480386,
+          "elsewhere": 0.9108884452525972
+        }
+      },
+      "rollout": {
+        "deletion_curve": [
+          0.7533555245355954,
+          0.7527089368093552,
+          0.7564240984668538,
+          0.6848229759841545,
+          0.2434536447275301,
+          0.0016825574873808188,
+          0.0
+        ],
+        "deletion_auc": 0.1448216057030314,
+        "localization": {
+          "inside_tumor": 0.009346032068969902,
+          "peritumoral": 0.036811922230840635,
+          "elsewhere": 0.9538420457001895
+        }
+      },
+      "random": {
+        "deletion_curve": [
+          0.7533555245355954,
+          0.7531434712520151,
+          0.7524177949709865,
+          0.7535104774249298,
+          0.7554489973844812,
+          0.7485701715794105,
+          0.7254808834006174
+        ],
+        "deletion_auc": 0.7433636579228518
+      }
+    },
+    "s2_TC": {
+      "hires": {
+        "deletion_curve": [
+          0.8790343887753257,
+          0.7516978223164387,
+          0.7185729120308559,
+          0.004984943951010906,
+          0.009694739982102019,
+          0.009818638186874031,
+          0.019629734886931104
+        ],
+        "deletion_auc": 0.06423659906954138,
+        "localization": {
+          "inside_tumor": 0.7960403341683303,
+          "peritumoral": 0.0,
+          "elsewhere": 0.2039596658316697
+        }
+      },
+      "grad": {
+        "deletion_curve": [
+          0.8790343887753257,
+          0.7515519807515828,
+          0.7171436220847216,
+          0.003981102362204725,
+          0.008797690296519335,
+          0.009004477703490155,
+          0.018517955114748446
+        ],
+        "deletion_auc": 0.06330244773544866,
+        "localization": {
+          "inside_tumor": 0.7960403341683303,
+          "peritumoral": 0.03025062624772707,
+          "elsewhere": 0.17370903958394263
+        }
+      },
+      "rollout": {
+        "deletion_curve": [
+          0.8790343887753257,
+          0.835698603796869,
+          0.7985041600283236,
+          0.7269823230384101,
+          0.6132633070734859,
+          0.4520823628062983,
+          0.1094989498949895
+        ],
+        "deletion_auc": 0.42127519435993543,
+        "localization": {
+          "inside_tumor": 0.2006027237007744,
+          "peritumoral": 0.019467721221214856,
+          "elsewhere": 0.7799295550780108
+        }
+      },
+      "random": {
+        "deletion_curve": [
+          0.8790343887753257,
+          0.8782626242945912,
+          0.8780698334911177,
+          0.876805781290327,
+          0.8734539600321982,
+          0.8701263138678443,
+          0.8744561967794479
+        ],
+        "deletion_auc": 0.8730283308023179
+      }
+    },
+    "s2_WT": {
+      "hires": {
+        "deletion_curve": [
+          0.9660109449743854,
+          0.9229043481567389,
+          0.8463046134104433,
+          0.6706796221982305,
+          0.1521667124078473,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.1384497575863319,
+        "localization": {
+          "inside_tumor": 1.0,
+          "peritumoral": 0.0,
+          "elsewhere": 0.0
+        }
+      },
+      "grad": {
+        "deletion_curve": [
+          0.9660109449743854,
+          0.922926919358168,
+          0.8465328552680915,
+          0.6715077198843036,
+          0.15780659587415855,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.13937156901949893,
+        "localization": {
+          "inside_tumor": 0.9978001856490724,
+          "peritumoral": 0.0021998143509276095,
+          "elsewhere": 0.0
+        }
+      },
+      "rollout": {
+        "deletion_curve": [
+          0.9660109449743854,
+          0.9636983218671639,
+          0.9542864851962931,
+          0.9237433483149065,
+          0.8605666648720485,
+          0.7581959812449797,
+          0.32621098461196313
+        ],
+        "deletion_auc": 0.6712316907725194,
+        "localization": {
+          "inside_tumor": 0.2671184975140826,
+          "peritumoral": 0.007718423763081266,
+          "elsewhere": 0.7251630787228361
+        }
+      },
+      "random": {
+        "deletion_curve": [
+          0.9660109449743854,
+          0.9659715898274913,
+          0.9658971560369859,
+          0.9650885633345987,
+          0.963642545151604,
+          0.9581491607508201,
+          0.9094279940739752
+        ],
+        "deletion_auc": 0.9454569568498024
+      }
+    },
+    "s2_ET": {
+      "hires": {
+        "deletion_curve": [
+          0.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.29000000000000004,
+        "localization": {
+          "inside_tumor": 0.0,
+          "peritumoral": 0.0,
+          "elsewhere": 1.0
+        }
+      },
+      "grad": {
+        "deletion_curve": [
+          0.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.29000000000000004,
+        "localization": {
+          "inside_tumor": 0.0,
+          "peritumoral": 0.0,
+          "elsewhere": 1.0
+        }
+      },
+      "rollout": {
+        "deletion_curve": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "deletion_auc": 0.0,
+        "localization": {
+          "inside_tumor": 0.0,
+          "peritumoral": 0.0,
+          "elsewhere": 1.0
+        }
+      },
+      "random": {
+        "deletion_curve": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "deletion_auc": 0.85
+      }
+    },
+    "sanity_check": {
+      "layer": "decoder0_header.1",
+      "method": "hires",
+      "class": "ET",
+      "cascade": [
+        {
+          "randomized_through": "decoder0_header",
+          "ssim_vs_trained": 0.9882060412648729
+        },
+        {
+          "randomized_through": "decoder3_upsampler",
+          "ssim_vs_trained": 0.9829151582843548
+        },
+        {
+          "randomized_through": "decoder6_upsampler",
+          "ssim_vs_trained": 0.9828832619101788
+        },
+        {
+          "randomized_through": "decoder9_upsampler",
+          "ssim_vs_trained": 0.9828814179807339
+        },
+        {
+          "randomized_through": "dilated_bottleneck",
+          "ssim_vs_trained": 0.9828810366220783
+        },
+        {
+          "randomized_through": "mamba_encoder",
+          "ssim_vs_trained": 0.9829235886919847
+        }
+      ]
+    }
+  }
+}

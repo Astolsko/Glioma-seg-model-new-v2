@@ -40,6 +40,42 @@ best ep23), same test recipe:
 
 ---
 
+## 2026-09-14 — Session 8: 60 epochs, test overlap 0.75, per-step CSVs + replot; duplicate patients found
+
+- **Data finding (data left as is, user's decision):** `data/combined` holds
+  369 `BraTS20_Training_*` + 334 `BraTS19_*` cases, and every BraTS19 case is an
+  identical copy of a BraTS20 case (same seg label counts; FLAIR arrays
+  identical on the 3 pairs checked). The seed-0 split puts the twin of 72/105
+  val and 55/70 test patients in train. Test Dice (TC/WT/ET) for the 15 test
+  patients with no twin in train vs the 55 with one: ViT 0.904/0.913/0.824 vs
+  0.871/0.910/0.814; Mamba 0.899/0.912/0.817 vs 0.858/0.916/0.820. No detectable
+  gain from the twins, but n=15 leaves wide error bars.
+- **config.py:** `epoch` 30 → 60, `warmup_epochs` 3 → 5. `infer.sw_overlap`
+  0.5 → 0.75 (threshold tuning + test). New `infer.val_sw_overlap = 0.5` keeps
+  per-epoch validation at its old cost; 0.75 there would add an estimated day
+  over 60 epochs. New `cfg.plot` section: font, size, dpi, formats, and EMA
+  smoothing (0.3 per epoch, 0.9 per step).
+- **New CSVs** (RUN.md §8): `train_steps.csv` has one row per optimizer step
+  (total, main-head, aux and per-term losses, lr). `val_steps.csv` has one row
+  per val patient per epoch (loss + terms, every metric per region). Both are
+  resume-safe like metrics.csv.
+- **Plots** are drawn from the CSVs, and `tools/replot.py` redraws any run.
+  Smoothing is applied only when drawing, with the raw curve faint underneath
+  and the weight on the figure. `loss.png` adds the main-head train loss, since
+  `train_loss` includes the deep-supervision heads and `val_loss` does not. New
+  `lr.png` and `loss_steps.png`; IoU and HD95 now plotted per region. The plot
+  style no longer leaks into global rcParams, so XAI figures drawn later keep
+  matplotlib defaults. A plotting error no longer aborts train.py before
+  tuning/test.
+- **Comparability:** a 60-epoch run tested at 0.75 overlap differs from
+  `v2-run3` / `v3-mamba-30ep` on both counts. `python evaluate.py --run <old>`
+  now also runs at 0.75, which separates the overlap effect without retraining.
+- **Deliberate leak for an assignment demo (user's requirement):**
+  `cfg.data.leak = "patient"` adds every val patient to the training set
+  (`BratsDataset._split_datalist`); test is untouched. Labelled by design: the
+  run name must contain "leak", log banner, config snapshot, watermarked plots.
+  Set `None` for honest runs. RUN.md §9.
+
 ## 2026-09-13 — Session 7: Mamba run read out; ET knee on val; paired ViT vs Mamba stats
 
 `v3-mamba-30ep` finished cleanly at 2026-09-13 00:28 IST. Training ended at 23:36;

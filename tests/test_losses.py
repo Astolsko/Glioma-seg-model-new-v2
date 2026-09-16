@@ -167,3 +167,36 @@ def test_combine_main_and_aux_uses_aux_loss_when_present(loss_cfg):
                 + loss_cfg.loss.aux_z6_weight * loss.aux_loss(aux_z6, labels)
                 + loss_cfg.loss.aux_z3_weight * loss.aux_loss(aux_z3, labels))
     assert total.item() == pytest.approx(expected.item(), rel=1e-5)
+
+
+def test_main_and_aux_losses_are_the_pieces_combine_main_and_aux_sums(loss_cfg):
+    """train_steps.csv logs these pieces, so they must add up to what is optimised."""
+    from utils.losses import main_and_aux_losses
+    loss = build_loss_fn(loss_cfg)
+    loss.set_epoch(3, 10)
+    outputs, aux_z6, aux_z3 = (torch.randn(1, 3, 8, 8, 8) for _ in range(3))
+    labels = (torch.rand(1, 3, 8, 8, 8) > 0.5).float()
+
+    total, main, l_z6, l_z3 = main_and_aux_losses(loss, outputs, aux_z6, aux_z3, labels, loss_cfg)
+
+    combined = combine_main_and_aux(loss, outputs, aux_z6, aux_z3, labels, loss_cfg)
+    assert total.item() == pytest.approx(combined.item(), rel=1e-5)
+    weighted = main + loss_cfg.loss.aux_z6_weight * l_z6 + loss_cfg.loss.aux_z3_weight * l_z3
+    assert total.item() == pytest.approx(weighted.item(), rel=1e-5)
+
+
+def test_last_terms_recombine_to_the_loss_and_hold_no_graph(loss_cfg):
+    loss = build_loss_fn(loss_cfg)
+    loss.set_epoch(1, 10)   # HD partially annealed, so hd_scale matters
+    outputs = torch.randn(1, 3, 8, 8, 8, requires_grad=True)
+    labels = (torch.rand(1, 3, 8, 8, 8) > 0.5).float()
+
+    value = loss(outputs, labels)
+
+    t = loss.last_terms
+    expected = (loss_cfg.loss.dice_weight * t["loss_dice"]
+                + loss_cfg.loss.tversky_weight * t["loss_focal_tversky"]
+                + loss_cfg.loss.hausdorff_weight * t["hd_scale"] * t["loss_hausdorff"])
+    assert value.item() == pytest.approx(float(expected), rel=1e-5)
+    assert 0.0 < t["hd_scale"] < 1.0
+    assert not any(torch.is_tensor(v) and v.requires_grad for v in t.values())

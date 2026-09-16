@@ -46,7 +46,9 @@ class RunLogger:
         log.txt               — full stdout/print capture
         config_snapshot.json  — cfg values used for this run
         metrics.csv           — one row per training epoch
-        plots/                — data distribution + loss/dice/hd95/iou curves
+        train_steps.csv       — one row per optimizer step (losses, lr)
+        val_steps.csv         — one row per validation patient per epoch
+        plots/                — data distribution + loss/dice/iou/hd95/lr curves
         visualizations/       — pre-training qualitative sample checks
         attention/            — attention-map overlays saved during validation
         checkpoints/          — best_metric_model.pth
@@ -86,6 +88,10 @@ class RunLogger:
 
         self.log_path = os.path.join(self.run_dir, "log.txt")
         self.metrics_csv_path = os.path.join(self.run_dir, "metrics.csv")
+        # One row per optimizer step / per validation patient per epoch, so any
+        # curve can be redrawn later (tools/replot.py) without retraining.
+        self.train_steps_csv_path = os.path.join(self.run_dir, "train_steps.csv")
+        self.val_steps_csv_path = os.path.join(self.run_dir, "val_steps.csv")
         self.test_metrics_csv_path = os.path.join(self.testing_dir, "test_metrics.csv")
         self.config_snapshot_path = os.path.join(self.run_dir, "config_snapshot.json")
         self.checkpoint_path = os.path.join(self.checkpoint_dir, "best_metric_model.pth")
@@ -103,6 +109,10 @@ class RunLogger:
         self._stderr = None
         self._metrics_writer = None
         self._metrics_file = None
+        self._train_steps_writer = None
+        self._train_steps_file = None
+        self._val_steps_writer = None
+        self._val_steps_file = None
         # The real terminal stream, kept undecorated (no log-file teeing) so
         # live-updating output (tqdm progress bars) can write straight to the
         # terminal without spamming log.txt with carriage-return redraws.
@@ -127,8 +137,9 @@ class RunLogger:
             print(f"\n=== RUN FAILED: {exc_type.__name__}: {exc_val} ===")
             traceback.print_exception(exc_type, exc_val, exc_tb, file=sys.stdout)
         print(f"Run finished {datetime.now().isoformat(timespec='seconds')}")
-        if self._metrics_file is not None:
-            self._metrics_file.close()
+        for handle in (self._metrics_file, self._train_steps_file, self._val_steps_file):
+            if handle is not None:
+                handle.close()
         sys.stdout, sys.stderr = self._stdout, self._stderr
         self._log_file.close()
         return False
@@ -157,26 +168,49 @@ class RunLogger:
         epoch that was written but whose checkpoint never landed gets re-run,
         and without this its old row would sit in the CSV twice.
         """
-        if self.resume and os.path.exists(self.metrics_csv_path) and resume_from_epoch > 0:
-            with open(self.metrics_csv_path, newline="") as f:
+        self._metrics_file, self._metrics_writer = self._open_epoch_keyed_csv(
+            self.metrics_csv_path, fieldnames, resume_from_epoch)
+
+    def open_step_csvs(self, train_fieldnames, val_fieldnames, resume_from_epoch=0):
+        """Open train_steps.csv (one row per optimizer step) and val_steps.csv
+        (one row per validation patient per epoch). Both carry an `epoch`
+        column, so a resume trims them exactly as it trims metrics.csv."""
+        self._train_steps_file, self._train_steps_writer = self._open_epoch_keyed_csv(
+            self.train_steps_csv_path, train_fieldnames, resume_from_epoch)
+        self._val_steps_file, self._val_steps_writer = self._open_epoch_keyed_csv(
+            self.val_steps_csv_path, val_fieldnames, resume_from_epoch)
+
+    def _open_epoch_keyed_csv(self, path, fieldnames, resume_from_epoch):
+        """Returns (file, DictWriter) for a CSV with an `epoch` column, applying
+        the resume rule open_metrics_csv documents."""
+        if self.resume and os.path.exists(path) and resume_from_epoch > 0:
+            with open(path, newline="") as f:
                 kept = [r for r in csv.DictReader(f)
                         if int(float(r.get("epoch") or 0)) <= resume_from_epoch]
-            with open(self.metrics_csv_path, "w", newline="") as f:
+            with open(path, "w", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(kept)
-            print(f"Resuming metrics.csv with {len(kept)} epoch rows kept")
-            self._metrics_file = open(self.metrics_csv_path, "a", newline="")
-            self._metrics_writer = csv.DictWriter(self._metrics_file, fieldnames=fieldnames)
-            return
+            print(f"Resuming {os.path.basename(path)} with {len(kept)} rows kept")
+            handle = open(path, "a", newline="")
+            return handle, csv.DictWriter(handle, fieldnames=fieldnames)
 
-        self._metrics_file = open(self.metrics_csv_path, "w", newline="")
-        self._metrics_writer = csv.DictWriter(self._metrics_file, fieldnames=fieldnames)
-        self._metrics_writer.writeheader()
+        handle = open(path, "w", newline="")
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        return handle, writer
 
     def log_epoch_metrics(self, row: dict):
         self._metrics_writer.writerow(row)
         self._metrics_file.flush()
+
+    def log_train_step(self, row: dict):
+        self._train_steps_writer.writerow(row)
+        self._train_steps_file.flush()
+
+    def log_val_step(self, row: dict):
+        self._val_steps_writer.writerow(row)
+        self._val_steps_file.flush()
 
     def write_test_metrics(self, row: dict):
         with open(self.test_metrics_csv_path, "w", newline="") as f:

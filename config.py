@@ -17,11 +17,13 @@ cfg.paths.logs_dir = "logs"
 # ---------------------------------------------------------------------------
 # Training
 # ---------------------------------------------------------------------------
-# 30 epochs for the Sept-2026 ViT-vs-Mamba encoder comparison (deadline-bound).
-# The native-1mm ViT run logs/v2-run3 trained for 50: its val mean Dice was
-# 0.8413 at epoch 30 and 0.8504 at its best (epoch 41), so compare the two
-# encoders' per-epoch curves (metrics.csv), not only the final number.
-cfg.epoch = 30
+# 60 epochs. The 30-epoch Mamba run (logs/v3-mamba-30ep) ended with the LR
+# already at its 1e-6 floor, and the 50-epoch ViT run (logs/v2-run3) was still
+# improving at epoch 41 (val mean Dice 0.8413 at epoch 30, 0.8504 at its best),
+# so the schedule, not the model, set the ceiling. A 60-epoch run is not
+# comparable to those two at their final epoch: compare the per-epoch curves
+# (metrics.csv) at matched epochs.
+cfg.epoch = 60
 cfg.learning_rate = 1e-4
 cfg.weight_decay = 1e-4
 cfg.patience = 50
@@ -33,7 +35,7 @@ cfg.seed = 0
 # Linear LR warmup for the first N epochs, then cosine over the rest. 50-epoch
 # runs plateaued around epoch 40 with the LR already at its 1e-6 floor, i.e.
 # the schedule ran out before the model did.
-cfg.warmup_epochs = 3   # was 5 on 50-epoch runs; ~10% of a 30-epoch run
+cfg.warmup_epochs = 5   # ~8% of a 60-epoch run (3 on the 30-epoch runs, 5 on the 50-epoch ones)
 
 # Exponential moving average of the weights. Validation, checkpointing and
 # testing all use the EMA copy; set to 0 to disable and train/eval the raw
@@ -101,6 +103,20 @@ cfg.data.batch_size_test = 1
 cfg.data.num_workers_train = 4
 cfg.data.num_workers_val = 4
 cfg.data.num_workers_test = 0
+
+# DELIBERATE DATA LEAKAGE, for the assignment demonstration of how leakage
+# inflates validation metrics. Set to None for any honest run (every paper run).
+#   "patient": every validation patient is ALSO put in the training set
+#   (utils/dataloader.py:BratsDataset._split_datalist). Per-epoch validation,
+#   best-checkpoint selection and threshold tuning then all score patients the
+#   model trained on. No test patient is trained on, so this run's val-vs-test
+#   gap is the demonstration.
+# So a leaked run can never pass for an honest one: train.py refuses a run name
+# without "leak" in it, log.txt prints a banner, config_snapshot.json records
+# this value, and every training-curve plot is watermarked.
+# Expect a small effect: 72 of the 105 val patients already have an identical
+# BraTS19/BraTS20 twin in train under the honest split (journal, Session 8).
+cfg.data.leak = "patient"
 
 # NATIVE 1mm pipeline (Session 5+). The scans are kept at their native 1mm
 # 240x240x155 grid — NO Resized downsample, NO fixed depth window. Instead:
@@ -209,7 +225,18 @@ cfg.infer = EasyDict()
 # MONAI's sliding_window_inference defaults (overlap=0.25, mode="constant")
 # seam patches together with equal weight, so voxels near a patch edge — where
 # the model has least context — count as much as voxels at the centre.
-cfg.infer.sw_overlap = 0.5
+#
+# 0.75 for threshold tuning and the test pass: the window stride halves along
+# each axis, so a typical foreground-cropped brain gets roughly 2-3x the
+# windows of 0.5 (on top of the 8x TTA), and every voxel is averaged over more
+# patch positions. Inference-only, so `python evaluate.py` applies it to an
+# existing checkpoint without retraining.
+cfg.infer.sw_overlap = 0.75
+# The per-epoch validation loop stays at 0.5. It is already ~18 of ~45 min per
+# epoch (10.4 s/volume x 105 volumes), and 2-3x that on each of 60 epochs would
+# add roughly a day to the run. So metrics.csv / val_steps.csv are measured at
+# this overlap, testing/ at sw_overlap.
+cfg.infer.val_sw_overlap = 0.5
 cfg.infer.sw_mode = "gaussian"
 
 # Average predictions over the 8 axis-flip combinations. Costs 8x inference,
@@ -257,6 +284,24 @@ cfg.infer.tune_thresholds_after_training = True
 # this floor.
 cfg.infer.min_component_voxels = (0, 0, 176)
 cfg.infer.min_total_voxels = (0, 0, 352)
+
+# ---------------------------------------------------------------------------
+# Training-curve plots (drawn from the CSVs at the end of train.py;
+# `python tools/replot.py --run <name>` redraws them with other settings)
+# ---------------------------------------------------------------------------
+cfg.plot = EasyDict()
+cfg.plot.font_family = "serif"
+cfg.plot.font_size = 12
+cfg.plot.fig_size = (7.0, 4.5)   # inches
+cfg.plot.dpi = 150
+cfg.plot.formats = ["png"]       # any of png / pdf / svg
+# Exponential moving average (TensorBoard-style, bias-corrected), applied when
+# drawing only: the CSVs keep the raw values, each raw curve is drawn faintly
+# under its smoothed one, and the weight is printed on the figure. 0 = off.
+# Per-epoch curves have 60 points and get a light touch; the per-step training
+# loss is ~530 random-patch losses per epoch and needs much more to be readable.
+cfg.plot.epoch_smoothing = 0.3
+cfg.plot.step_smoothing = 0.9
 
 # ---------------------------------------------------------------------------
 # Attention overlay visualization

@@ -1,0 +1,627 @@
+Run started 2026-09-14T04:37:18, logging to logs/v5-mamba-leak-demo
+Config snapshot saved: logs/v5-mamba-leak-demo/config_snapshot.json
+CUDA is available. Number of GPUs: 1
+Current GPU: NVIDIA RTX A6000
+GPU 0: NVIDIA RTX A6000
+Memory Allocated: 0.00 GB
+Memory Cached: 0.00 GB
+cuda:0
+Encoder: mamba | Trainable parameters: 102.14M (encoder 15.72M)
+FLOPs: 1374.42 GMac | Params: 102.14 M
+  note: ptflops/fvcore cannot see the fused selective-scan kernels, so the Mamba FLOP count is an undercount; compare min/epoch instead
+<monai.transforms.compose.Compose object at 0x7f26101df220>
+image: torch.Size([4, 128, 128, 96])
+label: torch.Size([3, 128, 128, 96])
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+DELIBERATE DATA LEAK (cfg.data.leak='patient'): 105 of the 105 validation patients are also in the 633-patient training set. This run's validation metrics do not measure generalisation; none of the 70 test patients is trained on.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+image shape: torch.Size([4, 135, 157, 144])
+label shape: torch.Size([3, 135, 157, 144])
+Saved index 0
+Saved index 5
+Saved index 10
+Saved index 15
+Saved index 20
+TRAIN
+Image shape : torch.Size([2, 4, 128, 128, 96])
+Label shape : torch.Size([2, 3, 128, 128, 96])
+
+VALIDATION
+Image shape : torch.Size([1, 4, 130, 171, 141])
+Label shape : torch.Size([1, 3, 130, 171, 141])
+Epoch 1/60 | lr=2.08e-05 | train_loss=1.0732 | val_loss=0.7696 | time=56m 43s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.088   0.088   90.77   0.965   0.758   0.048   0.403   0.000
+WT       0.378   0.378   72.14   0.925   0.911   0.254   0.581   0.000
+ET       0.074   0.071  101.14   0.382   0.938   0.038   0.486   0.000
+Mean     0.180   0.179   88.01   0.757   0.869   0.113   0.490   0.000
+best_mean_dice=0.1802 at_epoch=1 | new_best=True (model saved)
+run_eta=2d 7h 26m 35s remaining (finish ~Sep 16, 13:01)
+gpu_mem alloc=1.5G reserved=1.8G peak=22.7G retries=0 ooms=0
+Epoch 2/60 | lr=4.06e-05 | train_loss=1.1919 | val_loss=1.2791 | time=51m 42s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.203   0.203   97.36   0.968   0.913   0.122   0.517   0.000
+WT       0.790   0.790   28.21   0.847   0.995   0.679   0.834   0.000
+ET       0.661   0.629   36.51   0.713   0.998   0.507   0.752   0.000
+Mean     0.551   0.541   54.03   0.843   0.969   0.436   0.701   0.000
+best_mean_dice=0.5512 at_epoch=2 | new_best=True (model saved)
+run_eta=2d 4h 4m 42s remaining (finish ~Sep 16, 10:31)
+gpu_mem alloc=1.5G reserved=1.8G peak=22.7G retries=0 ooms=0
+Epoch 3/60 | lr=6.04e-05 | train_loss=0.9479 | val_loss=1.0376 | time=52m 1s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.423   0.423   38.77   0.974   0.975   0.297   0.636   0.000
+WT       0.793   0.793   18.84   0.936   0.992   0.687   0.838   0.000
+ET       0.623   0.593   36.61   0.833   0.996   0.470   0.733   0.000
+Mean     0.613   0.603   31.41   0.914   0.987   0.485   0.735   0.000
+best_mean_dice=0.6131 at_epoch=3 | new_best=True (model saved)
+run_eta=2d 2h 28m 8s remaining (finish ~Sep 16, 09:46)
+gpu_mem alloc=1.5G reserved=1.8G peak=22.7G retries=0 ooms=0
+Epoch 4/60 | lr=8.02e-05 | train_loss=0.6770 | val_loss=0.8362 | time=51m 45s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.486   0.486   27.31   0.969   0.981   0.353   0.667   0.000
+WT       0.816   0.816   15.59   0.944   0.993   0.717   0.854   0.000
+ET       0.644   0.613   34.43   0.842   0.996   0.495   0.745   0.000
+Mean     0.648   0.638   25.78   0.918   0.990   0.522   0.755   0.000
+best_mean_dice=0.6485 at_epoch=4 | new_best=True (model saved)
+run_eta=2d 1h 9m 58s remaining (finish ~Sep 16, 09:20)
+gpu_mem alloc=1.5G reserved=1.8G peak=22.7G retries=0 ooms=0
+/DATA/conda_envs/mamba/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:243: UserWarning: The epoch parameter in `scheduler.step()` was not necessary and is being deprecated where possible. Please use `scheduler.step()` to step the scheduler. During the deprecation, if epoch is different from None, the closed form is used instead of the new chainable form, where available. Please open an issue if you are unable to replicate your use case: https://github.com/pytorch/pytorch/issues/new/choose.
+  warnings.warn(EPOCH_DEPRECATION_WARNING, UserWarning)
+Epoch 5/60 | lr=1.00e-04 | train_loss=0.4761 | val_loss=0.6157 | time=52m 3s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.663   0.663   18.09   0.949   0.993   0.535   0.763   0.000
+WT       0.856   0.856   10.96   0.928   0.995   0.768   0.880   0.000
+ET       0.698   0.665   30.02   0.837   0.997   0.550   0.773   0.000
+Mean     0.739   0.728   19.69   0.904   0.995   0.618   0.806   0.000
+best_mean_dice=0.7392 at_epoch=5 | new_best=True (model saved)
+run_eta=2d 0h 5m 47s remaining (finish ~Sep 16, 09:08)
+gpu_mem alloc=1.5G reserved=1.8G peak=22.7G retries=0 ooms=0
+Epoch 6/60 | lr=9.99e-05 | train_loss=0.3859 | val_loss=0.4475 | time=51m 27s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.781   0.781   11.85   0.920   0.997   0.679   0.837   0.000
+WT       0.878   0.878    9.78   0.898   0.997   0.796   0.895   0.000
+ET       0.745   0.710   27.75   0.812   0.998   0.606   0.802   0.000
+Mean     0.802   0.790   16.46   0.876   0.997   0.694   0.844   0.000
+best_mean_dice=0.8015 at_epoch=6 | new_best=True (model saved)
+run_eta=1d 23h 0m 51s remaining (finish ~Sep 16, 08:55)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 7/60 | lr=9.97e-05 | train_loss=0.3421 | val_loss=0.3318 | time=51m 33s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.827   0.827    9.91   0.895   0.998   0.734   0.865   0.000
+WT       0.888   0.888    9.47   0.886   0.998   0.808   0.901   0.000
+ET       0.771   0.734   25.80   0.790   0.999   0.636   0.817   0.000
+Mean     0.829   0.816   15.06   0.857   0.998   0.726   0.861   0.000
+best_mean_dice=0.8287 at_epoch=7 | new_best=True (model saved)
+run_eta=1d 22h 0m 33s remaining (finish ~Sep 16, 08:47)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 8/60 | lr=9.93e-05 | train_loss=0.3043 | val_loss=0.2588 | time=51m 35s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.852   0.852    7.86   0.877   0.999   0.763   0.880   0.000
+WT       0.895   0.895    8.74   0.882   0.998   0.817   0.906   0.000
+ET       0.785   0.747   23.80   0.773   0.999   0.651   0.824   0.000
+Mean     0.844   0.831   13.46   0.844   0.999   0.744   0.870   0.000
+best_mean_dice=0.8438 at_epoch=8 | new_best=True (model saved)
+run_eta=1d 21h 3m 3s remaining (finish ~Sep 16, 08:41)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 9/60 | lr=9.87e-05 | train_loss=0.2916 | val_loss=0.2029 | time=52m 4s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.867   0.867    5.95   0.871   0.999   0.782   0.889   0.000
+WT       0.902   0.902    6.34   0.881   0.999   0.828   0.912   0.000
+ET       0.792   0.754   15.46   0.767   0.999   0.658   0.828   0.000
+Mean     0.854   0.841    9.25   0.840   0.999   0.756   0.876   0.000
+best_mean_dice=0.8539 at_epoch=9 | new_best=True (model saved)
+run_eta=1d 20h 9m 6s remaining (finish ~Sep 16, 08:39)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+[Attention] saved: logs/v5-mamba-leak-demo/attention/attention_epoch0010_BraTS19_CBICA_ABY_1_multislice.png
+Epoch 10/60 | lr=9.80e-05 | train_loss=0.2844 | val_loss=0.1861 | time=55m 12s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.872   0.872    5.81   0.864   0.999   0.788   0.893   0.990
+WT       0.905   0.905    5.64   0.880   0.999   0.832   0.914   0.986
+ET       0.797   0.759   15.39   0.763   0.999   0.663   0.830   0.930
+Mean     0.858   0.846    8.94   0.836   0.999   0.761   0.879   0.969
+best_mean_dice=0.8583 at_epoch=10 | new_best=True (model saved)
+run_eta=1d 19h 31m 43s remaining (finish ~Sep 16, 08:57)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 11/60 | lr=9.71e-05 | train_loss=0.2794 | val_loss=0.1672 | time=50m 34s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.880   0.880    5.49   0.863   0.999   0.798   0.897   0.000
+WT       0.907   0.907    5.47   0.882   0.999   0.836   0.915   0.000
+ET       0.803   0.765   15.06   0.762   0.999   0.668   0.833   0.000
+Mean     0.864   0.851    8.67   0.836   0.999   0.767   0.882   0.000
+best_mean_dice=0.8635 at_epoch=11 | new_best=True (model saved)
+run_eta=1d 18h 30m 7s remaining (finish ~Sep 16, 08:47)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 12/60 | lr=9.61e-05 | train_loss=0.2704 | val_loss=0.1596 | time=50m 45s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.885   0.885    5.15   0.861   0.999   0.804   0.900   0.000
+WT       0.909   0.909    6.93   0.886   0.999   0.838   0.917   0.000
+ET       0.810   0.771   14.74   0.763   0.999   0.675   0.837   0.000
+Mean     0.868   0.855    8.94   0.837   0.999   0.772   0.885   0.000
+best_mean_dice=0.8679 at_epoch=12 | new_best=True (model saved)
+run_eta=1d 17h 31m 8s remaining (finish ~Sep 16, 08:39)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 13/60 | lr=9.49e-05 | train_loss=0.2644 | val_loss=0.1824 | time=50m 36s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.887   0.887    6.66   0.868   0.999   0.807   0.902   0.000
+WT       0.909   0.909    6.64   0.886   0.999   0.838   0.917   0.000
+ET       0.813   0.774   21.57   0.766   0.999   0.678   0.838   0.000
+Mean     0.870   0.857   11.62   0.840   0.999   0.774   0.886   0.000
+best_mean_dice=0.8696 at_epoch=13 | new_best=True (model saved)
+run_eta=1d 16h 32m 59s remaining (finish ~Sep 16, 08:31)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 14/60 | lr=9.36e-05 | train_loss=0.2561 | val_loss=0.1435 | time=50m 40s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.893   0.893    4.90   0.871   0.999   0.815   0.906   0.000
+WT       0.914   0.914    4.96   0.888   0.999   0.846   0.921   0.000
+ET       0.818   0.779   21.35   0.769   0.999   0.684   0.841   0.000
+Mean     0.875   0.862   10.40   0.843   0.999   0.782   0.889   0.000
+best_mean_dice=0.8750 at_epoch=14 | new_best=True (model saved)
+run_eta=1d 15h 36m 19s remaining (finish ~Sep 16, 08:25)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 15/60 | lr=9.21e-05 | train_loss=0.2498 | val_loss=0.1397 | time=50m 55s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.895   0.895    3.94   0.873   0.999   0.818   0.908   0.000
+WT       0.915   0.915    4.87   0.887   0.999   0.847   0.921   0.000
+ET       0.822   0.783   20.83   0.772   0.999   0.688   0.843   0.000
+Mean     0.877   0.864    9.88   0.844   0.999   0.784   0.891   0.000
+best_mean_dice=0.8771 at_epoch=15 | new_best=True (model saved)
+run_eta=1d 14h 41m 9s remaining (finish ~Sep 16, 08:21)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 16/60 | lr=9.05e-05 | train_loss=0.2523 | val_loss=0.1371 | time=50m 33s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.897   0.897    3.92   0.877   0.999   0.821   0.909   0.000
+WT       0.916   0.916    4.72   0.890   0.999   0.849   0.923   0.000
+ET       0.825   0.786   20.81   0.777   0.999   0.692   0.845   0.000
+Mean     0.879   0.866    9.81   0.848   0.999   0.788   0.892   0.000
+best_mean_dice=0.8795 at_epoch=16 | new_best=True (model saved)
+run_eta=1d 13h 45m 22s remaining (finish ~Sep 16, 08:16)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 17/60 | lr=8.88e-05 | train_loss=0.2453 | val_loss=0.1389 | time=50m 47s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.899   0.899    3.88   0.879   0.999   0.824   0.911   0.000
+WT       0.916   0.916    5.18   0.889   0.999   0.848   0.922   0.000
+ET       0.827   0.787   20.80   0.778   0.999   0.694   0.846   0.000
+Mean     0.880   0.867    9.96   0.849   0.999   0.789   0.893   0.000
+best_mean_dice=0.8804 at_epoch=17 | new_best=True (model saved)
+run_eta=1d 12h 51m 5s remaining (finish ~Sep 16, 08:13)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 18/60 | lr=8.70e-05 | train_loss=0.2396 | val_loss=0.1361 | time=50m 32s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.900   0.900    3.83   0.879   0.999   0.826   0.912   0.000
+WT       0.918   0.918    4.71   0.890   0.999   0.851   0.923   0.000
+ET       0.829   0.790   20.77   0.779   0.999   0.697   0.848   0.000
+Mean     0.882   0.869    9.77   0.850   0.999   0.791   0.894   0.000
+best_mean_dice=0.8822 at_epoch=18 | new_best=True (model saved)
+run_eta=1d 11h 56m 27s remaining (finish ~Sep 16, 08:09)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 19/60 | lr=8.50e-05 | train_loss=0.2504 | val_loss=0.1355 | time=51m 52s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.901   0.901    3.82   0.879   0.999   0.828   0.913   0.000
+WT       0.919   0.919    4.71   0.892   0.999   0.853   0.924   0.000
+ET       0.831   0.791   20.72   0.780   0.999   0.699   0.849   0.000
+Mean     0.884   0.870    9.75   0.850   0.999   0.793   0.895   0.000
+best_mean_dice=0.8836 at_epoch=19 | new_best=True (model saved)
+run_eta=1d 11h 5m 17s remaining (finish ~Sep 16, 08:10)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+[Attention] saved: logs/v5-mamba-leak-demo/attention/attention_epoch0020_BraTS19_CBICA_ABY_1_multislice.png
+Epoch 20/60 | lr=8.29e-05 | train_loss=0.2559 | val_loss=0.1353 | time=55m 32s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.902   0.902    3.83   0.878   0.999   0.829   0.913   0.981
+WT       0.919   0.919    4.66   0.891   0.999   0.853   0.924   0.974
+ET       0.834   0.794   20.70   0.783   0.999   0.701   0.850   0.914
+Mean     0.885   0.872    9.73   0.851   0.999   0.794   0.896   0.957
+best_mean_dice=0.8849 at_epoch=20 | new_best=True (model saved)
+run_eta=1d 10h 21m 23s remaining (finish ~Sep 16, 08:22)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 21/60 | lr=8.07e-05 | train_loss=0.2325 | val_loss=0.1352 | time=51m 8s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.902   0.902    3.64   0.879   0.999   0.829   0.914   0.000
+WT       0.919   0.919    4.73   0.890   0.999   0.853   0.924   0.000
+ET       0.837   0.797   20.56   0.784   1.000   0.704   0.851   0.000
+Mean     0.886   0.873    9.64   0.851   0.999   0.796   0.896   0.000
+best_mean_dice=0.8860 at_epoch=21 | new_best=True (model saved)
+run_eta=1d 9h 28m 22s remaining (finish ~Sep 16, 08:21)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 22/60 | lr=7.84e-05 | train_loss=0.2317 | val_loss=0.1355 | time=51m 54s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.905   0.905    3.67   0.885   0.999   0.833   0.915   0.000
+WT       0.919   0.919    4.67   0.891   0.999   0.854   0.925   0.000
+ET       0.840   0.800   20.63   0.790   0.999   0.708   0.853   0.000
+Mean     0.888   0.875    9.66   0.856   0.999   0.798   0.898   0.000
+best_mean_dice=0.8881 at_epoch=22 | new_best=True (model saved)
+run_eta=1d 8h 36m 51s remaining (finish ~Sep 16, 08:21)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 23/60 | lr=7.61e-05 | train_loss=0.2306 | val_loss=0.1343 | time=51m 27s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.906   0.906    3.66   0.888   0.999   0.834   0.916   0.000
+WT       0.921   0.921    4.54   0.894   0.999   0.856   0.926   0.000
+ET       0.841   0.801   20.58   0.794   0.999   0.709   0.854   0.000
+Mean     0.889   0.876    9.59   0.859   0.999   0.800   0.899   0.000
+best_mean_dice=0.8891 at_epoch=23 | new_best=True (model saved)
+run_eta=1d 7h 44m 36s remaining (finish ~Sep 16, 08:21)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 24/60 | lr=7.36e-05 | train_loss=0.2255 | val_loss=0.1362 | time=51m 24s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.907   0.907    3.61   0.888   0.999   0.836   0.917   0.000
+WT       0.920   0.920    4.91   0.895   0.999   0.856   0.926   0.000
+ET       0.841   0.801   20.59   0.794   1.000   0.709   0.854   0.000
+Mean     0.889   0.876    9.70   0.859   0.999   0.800   0.899   0.000
+best_mean_dice=0.8894 at_epoch=24 | new_best=True (model saved)
+run_eta=1d 6h 52m 25s remaining (finish ~Sep 16, 08:20)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 25/60 | lr=7.11e-05 | train_loss=0.2239 | val_loss=0.1348 | time=51m 28s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.908   0.908    3.58   0.889   0.999   0.838   0.918   0.000
+WT       0.921   0.921    4.87   0.897   0.999   0.857   0.926   0.000
+ET       0.843   0.803   20.54   0.795   1.000   0.712   0.855   0.000
+Mean     0.891   0.878    9.66   0.860   0.999   0.802   0.900   0.000
+best_mean_dice=0.8909 at_epoch=25 | new_best=True (model saved)
+run_eta=1d 6h 0m 19s remaining (finish ~Sep 16, 08:20)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 26/60 | lr=6.85e-05 | train_loss=0.2282 | val_loss=0.1340 | time=51m 26s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.909   0.909    3.53   0.889   0.999   0.839   0.918   0.000
+WT       0.922   0.922    4.79   0.897   0.999   0.858   0.927   0.000
+ET       0.845   0.805   20.53   0.796   1.000   0.713   0.856   0.000
+Mean     0.892   0.878    9.62   0.861   0.999   0.804   0.900   0.000
+best_mean_dice=0.8918 at_epoch=26 | new_best=True (model saved)
+run_eta=1d 5h 8m 17s remaining (finish ~Sep 16, 08:19)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 27/60 | lr=6.58e-05 | train_loss=0.2219 | val_loss=0.1316 | time=50m 30s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.910   0.910    3.52   0.892   0.999   0.841   0.919   0.000
+WT       0.923   0.923    4.34   0.898   0.999   0.861   0.928   0.000
+ET       0.846   0.805   20.44   0.798   1.000   0.715   0.857   0.000
+Mean     0.893   0.880    9.43   0.863   0.999   0.806   0.902   0.000
+best_mean_dice=0.8932 at_epoch=27 | new_best=True (model saved)
+run_eta=1d 4h 15m 16s remaining (finish ~Sep 16, 08:17)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 28/60 | lr=6.31e-05 | train_loss=0.2232 | val_loss=0.1309 | time=51m 16s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.912   0.912    3.49   0.895   0.999   0.843   0.921   0.000
+WT       0.924   0.924    4.31   0.900   0.999   0.862   0.929   0.000
+ET       0.847   0.807   20.44   0.795   1.000   0.717   0.858   0.000
+Mean     0.894   0.881    9.41   0.863   0.999   0.807   0.902   0.000
+best_mean_dice=0.8944 at_epoch=28 | new_best=True (model saved)
+run_eta=1d 3h 23m 19s remaining (finish ~Sep 16, 08:17)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 29/60 | lr=6.03e-05 | train_loss=0.2192 | val_loss=0.1322 | time=51m 21s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.912   0.912    3.48   0.897   0.999   0.844   0.921   0.000
+WT       0.924   0.924    4.30   0.899   0.999   0.862   0.929   0.000
+ET       0.849   0.809   20.42   0.797   1.000   0.719   0.859   0.000
+Mean     0.895   0.882    9.40   0.864   0.999   0.808   0.903   0.000
+best_mean_dice=0.8953 at_epoch=29 | new_best=True (model saved)
+run_eta=1d 2h 31m 27s remaining (finish ~Sep 16, 08:16)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+[Attention] saved: logs/v5-mamba-leak-demo/attention/attention_epoch0030_BraTS19_CBICA_ABY_1_multislice.png
+Epoch 30/60 | lr=5.75e-05 | train_loss=0.2382 | val_loss=0.1328 | time=54m 43s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.914   0.914    3.45   0.898   0.999   0.846   0.922   0.978
+WT       0.924   0.924    4.30   0.899   0.999   0.862   0.929   0.971
+ET       0.851   0.810   20.39   0.799   1.000   0.721   0.860   0.910
+Mean     0.896   0.883    9.38   0.866   0.999   0.810   0.904   0.953
+best_mean_dice=0.8963 at_epoch=30 | new_best=True (model saved)
+run_eta=1d 1h 43m 1s remaining (finish ~Sep 16, 08:23)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 31/60 | lr=5.47e-05 | train_loss=0.2168 | val_loss=0.1322 | time=51m 20s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.914   0.914    3.43   0.899   0.999   0.847   0.922   0.000
+WT       0.924   0.924    4.31   0.899   0.999   0.862   0.929   0.000
+ET       0.852   0.812   20.40   0.800   1.000   0.723   0.861   0.000
+Mean     0.897   0.883    9.38   0.866   0.999   0.811   0.904   0.000
+best_mean_dice=0.8969 at_epoch=31 | new_best=True (model saved)
+run_eta=1d 0h 51m 2s remaining (finish ~Sep 16, 08:22)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 32/60 | lr=5.19e-05 | train_loss=0.2120 | val_loss=0.1295 | time=51m 36s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.915   0.915    3.40   0.900   0.999   0.847   0.923   0.000
+WT       0.925   0.925    4.25   0.900   0.999   0.863   0.930   0.000
+ET       0.854   0.813   20.47   0.803   1.000   0.724   0.862   0.000
+Mean     0.898   0.884    9.37   0.867   0.999   0.812   0.905   0.000
+best_mean_dice=0.8978 at_epoch=32 | new_best=True (model saved)
+run_eta=23h 59m 27s remaining (finish ~Sep 16, 08:23)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 33/60 | lr=4.91e-05 | train_loss=0.2132 | val_loss=0.1284 | time=51m 27s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.916   0.916    3.38   0.898   0.999   0.849   0.923   0.000
+WT       0.925   0.925    4.21   0.901   0.999   0.864   0.930   0.000
+ET       0.855   0.815   20.36   0.805   1.000   0.726   0.863   0.000
+Mean     0.899   0.885    9.32   0.868   0.999   0.813   0.905   0.000
+best_mean_dice=0.8989 at_epoch=33 | new_best=True (model saved)
+run_eta=23h 7m 45s remaining (finish ~Sep 16, 08:23)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 34/60 | lr=4.63e-05 | train_loss=0.2075 | val_loss=0.1282 | time=51m 31s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.916   0.916    3.35   0.900   0.999   0.849   0.924   0.000
+WT       0.926   0.926    4.19   0.902   0.999   0.865   0.930   0.000
+ET       0.856   0.815   20.32   0.806   1.000   0.727   0.863   0.000
+Mean     0.899   0.886    9.28   0.869   0.999   0.814   0.906   0.000
+best_mean_dice=0.8993 at_epoch=34 | new_best=True (model saved)
+run_eta=22h 16m 9s remaining (finish ~Sep 16, 08:23)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 35/60 | lr=4.35e-05 | train_loss=0.2078 | val_loss=0.1272 | time=51m 24s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.917   0.917    3.34   0.901   0.999   0.851   0.925   0.000
+WT       0.926   0.926    4.14   0.902   0.999   0.865   0.931   0.000
+ET       0.858   0.817   20.41   0.807   1.000   0.729   0.864   0.000
+Mean     0.900   0.887    9.30   0.870   0.999   0.815   0.906   0.000
+best_mean_dice=0.9004 at_epoch=35 | new_best=True (model saved)
+run_eta=21h 24m 27s remaining (finish ~Sep 16, 08:23)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 36/60 | lr=4.07e-05 | train_loss=0.2083 | val_loss=0.1257 | time=51m 26s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.918   0.918    3.32   0.903   0.999   0.853   0.925   0.000
+WT       0.927   0.927    4.10   0.903   0.999   0.866   0.931   0.000
+ET       0.858   0.817   20.39   0.809   1.000   0.730   0.864   0.000
+Mean     0.901   0.887    9.27   0.872   0.999   0.816   0.907   0.000
+best_mean_dice=0.9010 at_epoch=36 | new_best=True (model saved)
+run_eta=20h 32m 52s remaining (finish ~Sep 16, 08:23)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 37/60 | lr=3.79e-05 | train_loss=0.2052 | val_loss=0.1245 | time=51m 31s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.919   0.919    3.28   0.903   0.999   0.854   0.926   0.000
+WT       0.927   0.927    4.06   0.905   0.999   0.867   0.932   0.000
+ET       0.860   0.819   20.36   0.811   1.000   0.732   0.865   0.000
+Mean     0.902   0.888    9.23   0.873   0.999   0.818   0.908   0.000
+best_mean_dice=0.9019 at_epoch=37 | new_best=True (model saved)
+run_eta=19h 41m 16s remaining (finish ~Sep 16, 08:23)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 38/60 | lr=3.52e-05 | train_loss=0.2005 | val_loss=0.1240 | time=51m 24s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.919   0.919    3.28   0.902   0.999   0.855   0.926   0.000
+WT       0.928   0.928    4.02   0.906   0.999   0.868   0.932   0.000
+ET       0.860   0.819   20.29   0.812   1.000   0.733   0.866   0.000
+Mean     0.903   0.889    9.20   0.873   0.999   0.818   0.908   0.000
+best_mean_dice=0.9025 at_epoch=38 | new_best=True (model saved)
+run_eta=18h 49m 42s remaining (finish ~Sep 16, 08:23)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 39/60 | lr=3.25e-05 | train_loss=0.2044 | val_loss=0.1241 | time=51m 5s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.920   0.920    3.24   0.902   0.999   0.856   0.927   0.000
+WT       0.928   0.928    4.02   0.906   0.999   0.868   0.932   0.000
+ET       0.861   0.820   20.27   0.812   1.000   0.733   0.866   0.000
+Mean     0.903   0.889    9.18   0.873   0.999   0.819   0.908   0.000
+best_mean_dice=0.9030 at_epoch=39 | new_best=True (model saved)
+run_eta=17h 57m 58s remaining (finish ~Sep 16, 08:23)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+[Attention] saved: logs/v5-mamba-leak-demo/attention/attention_epoch0040_BraTS19_CBICA_ABY_1_multislice.png
+Epoch 40/60 | lr=2.99e-05 | train_loss=0.1989 | val_loss=0.1228 | time=55m 22s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.920   0.920    3.23   0.902   0.999   0.856   0.927   0.975
+WT       0.928   0.928    3.99   0.905   0.999   0.869   0.932   0.969
+ET       0.862   0.821   20.26   0.811   1.000   0.734   0.867   0.909
+Mean     0.904   0.890    9.16   0.873   0.999   0.820   0.909   0.951
+best_mean_dice=0.9035 at_epoch=40 | new_best=True (model saved)
+run_eta=17h 8m 28s remaining (finish ~Sep 16, 08:29)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.0G retries=0 ooms=0
+Epoch 41/60 | lr=2.74e-05 | train_loss=0.2018 | val_loss=0.1221 | time=51m 43s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.921   0.921    3.20   0.904   0.999   0.857   0.928   0.000
+WT       0.929   0.929    3.96   0.906   0.999   0.870   0.933   0.000
+ET       0.863   0.822   20.23   0.813   1.000   0.736   0.867   0.000
+Mean     0.904   0.891    9.13   0.874   0.999   0.821   0.909   0.000
+best_mean_dice=0.9042 at_epoch=41 | new_best=True (model saved)
+run_eta=16h 16m 58s remaining (finish ~Sep 16, 08:29)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 42/60 | lr=2.49e-05 | train_loss=0.1979 | val_loss=0.1215 | time=51m 42s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.922   0.922    3.17   0.904   0.999   0.858   0.928   0.000
+WT       0.929   0.929    3.94   0.907   0.999   0.870   0.933   0.000
+ET       0.864   0.823   20.25   0.814   1.000   0.737   0.868   0.000
+Mean     0.905   0.891    9.12   0.875   0.999   0.822   0.910   0.000
+best_mean_dice=0.9049 at_epoch=42 | new_best=True (model saved)
+run_eta=15h 25m 27s remaining (finish ~Sep 16, 08:30)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 43/60 | lr=2.26e-05 | train_loss=0.1946 | val_loss=0.1208 | time=51m 24s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.922   0.922    3.15   0.905   0.999   0.859   0.928   0.000
+WT       0.930   0.930    3.90   0.908   0.999   0.871   0.934   0.000
+ET       0.864   0.822   20.25   0.813   1.000   0.737   0.868   0.000
+Mean     0.905   0.891    9.10   0.875   0.999   0.822   0.910   0.000
+best_mean_dice=0.9051 at_epoch=43 | new_best=True (model saved)
+run_eta=14h 33m 52s remaining (finish ~Sep 16, 08:30)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 44/60 | lr=2.03e-05 | train_loss=0.1957 | val_loss=0.1197 | time=51m 27s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.922   0.922    3.14   0.905   0.999   0.859   0.929   0.000
+WT       0.930   0.930    3.83   0.908   0.999   0.872   0.934   0.000
+ET       0.864   0.823   20.24   0.815   1.000   0.738   0.868   0.000
+Mean     0.906   0.892    9.07   0.876   0.999   0.823   0.910   0.000
+best_mean_dice=0.9055 at_epoch=44 | new_best=True (model saved)
+run_eta=13h 42m 21s remaining (finish ~Sep 16, 08:30)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 45/60 | lr=1.81e-05 | train_loss=0.1967 | val_loss=0.1191 | time=51m 22s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.923   0.923    3.12   0.905   0.999   0.860   0.929   0.000
+WT       0.930   0.930    3.80   0.909   0.999   0.872   0.934   0.000
+ET       0.865   0.824   20.25   0.816   1.000   0.739   0.869   0.000
+Mean     0.906   0.892    9.06   0.877   0.999   0.823   0.911   0.000
+best_mean_dice=0.9059 at_epoch=45 | new_best=True (model saved)
+run_eta=12h 50m 48s remaining (finish ~Sep 16, 08:30)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 46/60 | lr=1.60e-05 | train_loss=0.1894 | val_loss=0.1180 | time=51m 28s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.923   0.923    3.11   0.906   0.999   0.860   0.929   0.000
+WT       0.931   0.931    3.74   0.910   0.999   0.873   0.935   0.000
+ET       0.866   0.824   20.20   0.818   1.000   0.740   0.869   0.000
+Mean     0.907   0.893    9.02   0.878   0.999   0.824   0.911   0.000
+best_mean_dice=0.9066 at_epoch=46 | new_best=True (model saved)
+run_eta=11h 59m 20s remaining (finish ~Sep 16, 08:30)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 47/60 | lr=1.40e-05 | train_loss=0.1896 | val_loss=0.1171 | time=51m 34s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.924   0.924    3.10   0.907   0.999   0.861   0.930   0.000
+WT       0.931   0.931    3.71   0.911   0.999   0.874   0.935   0.000
+ET       0.866   0.825   20.20   0.818   1.000   0.740   0.870   0.000
+Mean     0.907   0.893    9.00   0.879   0.999   0.825   0.911   0.000
+best_mean_dice=0.9071 at_epoch=47 | new_best=True (model saved)
+run_eta=11h 7m 53s remaining (finish ~Sep 16, 08:31)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 48/60 | lr=1.22e-05 | train_loss=0.1889 | val_loss=0.1164 | time=51m 21s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.924   0.924    3.09   0.907   0.999   0.862   0.930   0.000
+WT       0.932   0.932    3.69   0.911   0.999   0.874   0.935   0.000
+ET       0.867   0.826   20.22   0.818   1.000   0.741   0.870   0.000
+Mean     0.907   0.894    9.00   0.879   0.999   0.826   0.912   0.000
+best_mean_dice=0.9075 at_epoch=48 | new_best=True (model saved)
+run_eta=10h 16m 22s remaining (finish ~Sep 16, 08:31)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 49/60 | lr=1.05e-05 | train_loss=0.1901 | val_loss=0.1157 | time=51m 24s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.924   0.924    3.07   0.907   0.999   0.862   0.930   0.000
+WT       0.932   0.932    3.67   0.911   0.999   0.874   0.935   0.000
+ET       0.867   0.826   20.24   0.817   1.000   0.742   0.870   0.000
+Mean     0.908   0.894    8.99   0.878   0.999   0.826   0.912   0.000
+best_mean_dice=0.9078 at_epoch=49 | new_best=True (model saved)
+run_eta=9h 24m 56s remaining (finish ~Sep 16, 08:31)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+[Attention] saved: logs/v5-mamba-leak-demo/attention/attention_epoch0050_BraTS19_CBICA_ABY_1_multislice.png
+Epoch 50/60 | lr=8.86e-06 | train_loss=0.1866 | val_loss=0.1152 | time=55m 40s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.925   0.925    3.05   0.909   0.999   0.863   0.931   0.975
+WT       0.932   0.932    3.65   0.910   0.999   0.874   0.935   0.969
+ET       0.868   0.826   20.21   0.819   1.000   0.742   0.871   0.908
+Mean     0.908   0.894    8.97   0.879   0.999   0.827   0.912   0.951
+best_mean_dice=0.9082 at_epoch=50 | new_best=True (model saved)
+run_eta=8h 34m 21s remaining (finish ~Sep 16, 08:36)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 51/60 | lr=7.40e-06 | train_loss=0.1907 | val_loss=0.1147 | time=51m 28s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.925   0.925    3.04   0.909   0.999   0.864   0.931   0.000
+WT       0.932   0.932    3.64   0.911   0.999   0.875   0.936   0.000
+ET       0.868   0.827   20.20   0.819   1.000   0.743   0.871   0.000
+Mean     0.908   0.895    8.96   0.879   0.999   0.827   0.912   0.000
+best_mean_dice=0.9084 at_epoch=51 | new_best=True (model saved)
+run_eta=7h 42m 51s remaining (finish ~Sep 16, 08:36)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 52/60 | lr=6.08e-06 | train_loss=0.1910 | val_loss=0.1142 | time=51m 1s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.926   0.926    3.03   0.910   0.999   0.864   0.931   0.000
+WT       0.932   0.932    3.63   0.911   0.999   0.875   0.936   0.000
+ET       0.869   0.827   20.19   0.819   1.000   0.743   0.871   0.000
+Mean     0.909   0.895    8.95   0.880   0.999   0.828   0.913   0.000
+best_mean_dice=0.9087 at_epoch=52 | new_best=True (model saved)
+run_eta=6h 51m 18s remaining (finish ~Sep 16, 08:36)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 53/60 | lr=4.90e-06 | train_loss=0.1823 | val_loss=0.1137 | time=51m 27s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.926   0.926    3.01   0.910   0.999   0.865   0.931   0.000
+WT       0.932   0.932    3.62   0.911   0.999   0.875   0.936   0.000
+ET       0.869   0.828   20.21   0.821   1.000   0.744   0.871   0.000
+Mean     0.909   0.895    8.95   0.881   0.999   0.828   0.913   0.000
+best_mean_dice=0.9091 at_epoch=53 | new_best=True (model saved)
+run_eta=5h 59m 51s remaining (finish ~Sep 16, 08:36)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 54/60 | lr=3.88e-06 | train_loss=0.1834 | val_loss=0.1134 | time=51m 32s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.926   0.926    3.00   0.910   0.999   0.865   0.932   0.000
+WT       0.933   0.933    3.59   0.912   0.999   0.876   0.936   0.000
+ET       0.869   0.828   20.20   0.822   1.000   0.744   0.872   0.000
+Mean     0.909   0.895    8.93   0.881   0.999   0.828   0.913   0.000
+best_mean_dice=0.9093 at_epoch=54 | new_best=True (model saved)
+run_eta=5h 8m 25s remaining (finish ~Sep 16, 08:37)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 55/60 | lr=3.01e-06 | train_loss=0.1871 | val_loss=0.1132 | time=51m 31s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.926   0.926    3.00   0.910   0.999   0.865   0.932   0.000
+WT       0.933   0.933    3.59   0.912   0.999   0.876   0.936   0.000
+ET       0.869   0.828   20.19   0.822   1.000   0.744   0.872   0.000
+Mean     0.909   0.896    8.93   0.881   0.999   0.829   0.913   0.000
+best_mean_dice=0.9094 at_epoch=55 | new_best=True (model saved)
+run_eta=4h 16m 59s remaining (finish ~Sep 16, 08:37)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 56/60 | lr=2.29e-06 | train_loss=0.1809 | val_loss=0.1126 | time=51m 27s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.926   0.926    2.99   0.910   0.999   0.865   0.932   0.000
+WT       0.933   0.933    3.57   0.912   0.999   0.876   0.936   0.000
+ET       0.870   0.828   20.19   0.821   1.000   0.745   0.872   0.000
+Mean     0.910   0.896    8.91   0.881   0.999   0.829   0.913   0.000
+best_mean_dice=0.9096 at_epoch=56 | new_best=True (model saved)
+run_eta=3h 25m 33s remaining (finish ~Sep 16, 08:37)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 57/60 | lr=1.72e-06 | train_loss=0.1855 | val_loss=0.1121 | time=51m 18s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.926   0.926    2.99   0.911   0.999   0.866   0.932   0.000
+WT       0.933   0.933    3.57   0.912   0.999   0.876   0.936   0.000
+ET       0.870   0.829   20.20   0.821   1.000   0.745   0.872   0.000
+Mean     0.910   0.896    8.92   0.881   0.999   0.829   0.913   0.000
+best_mean_dice=0.9099 at_epoch=57 | new_best=True (model saved)
+run_eta=2h 34m 8s remaining (finish ~Sep 16, 08:37)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 58/60 | lr=1.32e-06 | train_loss=0.1847 | val_loss=0.1120 | time=51m 57s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.926   0.926    2.99   0.911   0.999   0.866   0.932   0.000
+WT       0.933   0.933    3.56   0.912   0.999   0.876   0.936   0.000
+ET       0.870   0.829   20.20   0.821   1.000   0.746   0.872   0.000
+Mean     0.910   0.896    8.92   0.881   0.999   0.829   0.914   0.000
+best_mean_dice=0.9100 at_epoch=58 | new_best=True (model saved)
+run_eta=1h 42m 45s remaining (finish ~Sep 16, 08:38)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Epoch 59/60 | lr=1.08e-06 | train_loss=0.1883 | val_loss=0.1119 | time=51m 52s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.927   0.927    2.99   0.911   0.999   0.866   0.932   0.000
+WT       0.933   0.933    3.56   0.912   0.999   0.877   0.936   0.000
+ET       0.871   0.829   20.22   0.822   1.000   0.746   0.872   0.000
+Mean     0.910   0.896    8.92   0.882   0.999   0.830   0.914   0.000
+best_mean_dice=0.9102 at_epoch=59 | new_best=True (model saved)
+run_eta=51m 22s remaining (finish ~Sep 16, 08:39)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+[Attention] saved: logs/v5-mamba-leak-demo/attention/attention_epoch0060_BraTS19_CBICA_ABY_1_multislice.png
+Epoch 60/60 | lr=1.00e-06 | train_loss=0.1827 | val_loss=0.1118 | time=55m 37s
+          Dice      F1    HD95    Sens    Spec     IoU    mIoU     AUC
+TC       0.927   0.927    2.98   0.911   0.999   0.866   0.932   0.976
+WT       0.933   0.933    3.53   0.913   0.999   0.877   0.937   0.970
+ET       0.871   0.829   20.23   0.823   1.000   0.746   0.872   0.908
+Mean     0.910   0.896    8.92   0.882   0.999   0.830   0.914   0.951
+best_mean_dice=0.9103 at_epoch=60 | new_best=True (model saved)
+run_eta=0s remaining (finish ~Sep 16, 08:43)
+gpu_mem alloc=1.5G reserved=1.8G peak=23.8G retries=0 ooms=0
+Train completed | best_metric: 0.9103 @ epoch 60 | total time: 2d 4h 5m 59s
+[Evolution] saved: logs/v5-mamba-leak-demo/attention/attention_evolution.png
+All plots saved to logs/v5-mamba-leak-demo/plots/
+
+=== Tuning inference thresholds on the validation split ===
+Test inference | thresholds=(0.25, 0.1, 0.25) | tta_flips=True | sw_overlap=0.75 (gaussian) | min_component=(0, 0, 176) | min_total=(0, 0, 352)
+image shape: torch.Size([4, 128, 175, 129])
+label shape: torch.Size([3, 128, 175, 129])
+Test | ET: Dice=0.845 HD95=23.19 Sens=0.766 IoU=0.673 | WT: Dice=0.928 HD95=3.87 Sens=0.937 IoU=0.868 | TC: Dice=0.916 HD95=2.88 Sens=0.902 IoU=0.849 | Mean: Dice=0.896 HD95=9.98 Sens=0.868 IoU=0.796 mIoU=0.796
+HD95 breakdown (n=70) | TC: 0 hallucinated + 0 missed (374.0 each), 2.88mm over the 70 clean cases | WT: 0 hallucinated + 0 missed (374.0 each), 3.87mm over the 70 clean cases | ET: 2 hallucinated + 2 missed (374.0 each), 2.12mm over the 60 clean cases
+Metric on test image:  0.8982089757919312
+metric_tc: 0.9156
+metric_wt: 0.9280
+metric_et: 0.8451
+Test metrics saved: logs/v5-mamba-leak-demo/testing/test_metrics.csv
+
+=== Explainability suite ===
+[XAI] explaining 3 test sample(s) -> logs/v5-mamba-leak-demo/xai
+
+[XAI: cam]
+  wrote logs/v5-mamba-leak-demo/xai/cam.json
+
+[XAI: modality]
+  Dice change when a modality is removed (TC / WT / ET):
+    -FLAIR   -0.2324  -0.3917  -0.1217
+    -T1      -0.1116  -0.1038  -0.1116
+    -T1ce    -0.6045  -0.0545  -0.6677
+    -T2      -0.0422  -0.0187  -0.0379
+  wrote logs/v5-mamba-leak-demo/xai/modality.json
+
+[XAI: uncertainty]
+  wrote logs/v5-mamba-leak-demo/xai/uncertainty.json
+
+[XAI: rollout]
+  wrote logs/v5-mamba-leak-demo/xai/rollout.json
+
+[XAI: faithful]
+  Cascading randomisation (SSIM vs trained map — must decay):
+    through decoder0_header      SSIM=0.9882
+    through decoder3_upsampler   SSIM=0.9829
+    through decoder6_upsampler   SSIM=0.9829
+    through decoder9_upsampler   SSIM=0.9829
+    through dilated_bottleneck   SSIM=0.9829
+    through mamba_encoder        SSIM=0.9829
+  wrote logs/v5-mamba-leak-demo/xai/faithful.json
+  wrote logs/v5-mamba-leak-demo/xai/summary.json
+[XAI] complete -> logs/v5-mamba-leak-demo/xai
+Run finished 2026-09-16T10:20:16

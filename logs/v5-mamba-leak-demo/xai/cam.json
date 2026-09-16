@@ -1,0 +1,290 @@
+{
+  "s0_TC_decoder9_upsampler_hires": {
+    "mass_in_tumor": 0.2827709913253784,
+    "peak_value": 1.0
+  },
+  "s0_TC_decoder9_upsampler_grad": {
+    "mass_in_tumor": 9.149542989916881e-08,
+    "peak_value": 1.0
+  },
+  "s0_TC_decoder6_upsampler_hires": {
+    "mass_in_tumor": 0.4309133291244507,
+    "peak_value": 1.0
+  },
+  "s0_TC_decoder6_upsampler_grad": {
+    "mass_in_tumor": 0.9386807084083557,
+    "peak_value": 1.0
+  },
+  "s0_TC_decoder3_upsampler_hires": {
+    "mass_in_tumor": 0.6313623189926147,
+    "peak_value": 1.0
+  },
+  "s0_TC_decoder3_upsampler_grad": {
+    "mass_in_tumor": 0.9844459295272827,
+    "peak_value": 1.0
+  },
+  "s0_TC_decoder0_header1_hires": {
+    "mass_in_tumor": 1.0000001192092896,
+    "peak_value": 1.0
+  },
+  "s0_TC_decoder0_header1_grad": {
+    "mass_in_tumor": 0.9827384352684021,
+    "peak_value": 1.0
+  },
+  "s0_WT_decoder9_upsampler_hires": {
+    "mass_in_tumor": 0.2783586084842682,
+    "peak_value": 1.0
+  },
+  "s0_WT_decoder9_upsampler_grad": {
+    "mass_in_tumor": 0.3275966942310333,
+    "peak_value": 1.0
+  },
+  "s0_WT_decoder6_upsampler_hires": {
+    "mass_in_tumor": 0.3379509449005127,
+    "peak_value": 1.0
+  },
+  "s0_WT_decoder6_upsampler_grad": {
+    "mass_in_tumor": 0.9775611758232117,
+    "peak_value": 1.0
+  },
+  "s0_WT_decoder3_upsampler_hires": {
+    "mass_in_tumor": 0.03946072235703468,
+    "peak_value": 1.0
+  },
+  "s0_WT_decoder3_upsampler_grad": {
+    "mass_in_tumor": 0.9888978004455566,
+    "peak_value": 1.0
+  },
+  "s0_WT_decoder0_header1_hires": {
+    "mass_in_tumor": 1.0000003576278687,
+    "peak_value": 1.0
+  },
+  "s0_WT_decoder0_header1_grad": {
+    "mass_in_tumor": 0.9786244034767151,
+    "peak_value": 1.0
+  },
+  "s0_ET_decoder9_upsampler_hires": {
+    "mass_in_tumor": 0.22050294280052185,
+    "peak_value": 1.0
+  },
+  "s0_ET_decoder9_upsampler_grad": {
+    "mass_in_tumor": 1.3909645701914997e-07,
+    "peak_value": 1.0
+  },
+  "s0_ET_decoder6_upsampler_hires": {
+    "mass_in_tumor": 0.5304182767868042,
+    "peak_value": 1.0
+  },
+  "s0_ET_decoder6_upsampler_grad": {
+    "mass_in_tumor": 0.7073037624359131,
+    "peak_value": 1.0
+  },
+  "s0_ET_decoder3_upsampler_hires": {
+    "mass_in_tumor": 0.6908134818077087,
+    "peak_value": 1.0
+  },
+  "s0_ET_decoder3_upsampler_grad": {
+    "mass_in_tumor": 0.7849861979484558,
+    "peak_value": 1.0
+  },
+  "s0_ET_decoder0_header1_hires": {
+    "mass_in_tumor": 1.0000001192092896,
+    "peak_value": 1.0
+  },
+  "s0_ET_decoder0_header1_grad": {
+    "mass_in_tumor": 0.9103603959083557,
+    "peak_value": 1.0
+  },
+  "s1_TC_decoder9_upsampler_hires": {
+    "mass_in_tumor": 0.24491962790489197,
+    "peak_value": 1.0
+  },
+  "s1_TC_decoder9_upsampler_grad": {
+    "mass_in_tumor": 0.0,
+    "peak_value": 1.0
+  },
+  "s1_TC_decoder6_upsampler_hires": {
+    "mass_in_tumor": 0.4373498857021332,
+    "peak_value": 1.0
+  },
+  "s1_TC_decoder6_upsampler_grad": {
+    "mass_in_tumor": 0.9368637800216675,
+    "peak_value": 1.0
+  },
+  "s1_TC_decoder3_upsampler_hires": {
+    "mass_in_tumor": 0.5826282501220703,
+    "peak_value": 1.0
+  },
+  "s1_TC_decoder3_upsampler_grad": {
+    "mass_in_tumor": 0.9777858853340149,
+    "peak_value": 1.0
+  },
+  "s1_TC_decoder0_header1_hires": {
+    "mass_in_tumor": 0.9999999403953552,
+    "peak_value": 1.0
+  },
+  "s1_TC_decoder0_header1_grad": {
+    "mass_in_tumor": 0.9603859186172485,
+    "peak_value": 1.0
+  },
+  "s1_WT_decoder9_upsampler_hires": {
+    "mass_in_tumor": 0.46313437819480896,
+    "peak_value": 1.0
+  },
+  "s1_WT_decoder9_upsampler_grad": {
+    "mass_in_tumor": 0.12400563806295395,
+    "peak_value": 1.0
+  },
+  "s1_WT_decoder6_upsampler_hires": {
+    "mass_in_tumor": 0.33163750171661377,
+    "peak_value": 1.0
+  },
+  "s1_WT_decoder6_upsampler_grad": {
+    "mass_in_tumor": 0.9718812704086304,
+    "peak_value": 1.0
+  },
+  "s1_WT_decoder3_upsampler_hires": {
+    "mass_in_tumor": 0.03788396716117859,
+    "peak_value": 1.0
+  },
+  "s1_WT_decoder3_upsampler_grad": {
+    "mass_in_tumor": 0.5605835914611816,
+    "peak_value": 1.0
+  },
+  "s1_WT_decoder0_header1_hires": {
+    "mass_in_tumor": 0.9999998807907104,
+    "peak_value": 1.0
+  },
+  "s1_WT_decoder0_header1_grad": {
+    "mass_in_tumor": 0.9741285443305969,
+    "peak_value": 1.0
+  },
+  "s1_ET_decoder9_upsampler_hires": {
+    "mass_in_tumor": 0.10929743200540543,
+    "peak_value": 1.0
+  },
+  "s1_ET_decoder9_upsampler_grad": {
+    "mass_in_tumor": 0.0,
+    "peak_value": 1.0
+  },
+  "s1_ET_decoder6_upsampler_hires": {
+    "mass_in_tumor": 0.45258593559265137,
+    "peak_value": 1.0
+  },
+  "s1_ET_decoder6_upsampler_grad": {
+    "mass_in_tumor": 0.673474907875061,
+    "peak_value": 1.0
+  },
+  "s1_ET_decoder3_upsampler_hires": {
+    "mass_in_tumor": 0.5528888702392578,
+    "peak_value": 1.0
+  },
+  "s1_ET_decoder3_upsampler_grad": {
+    "mass_in_tumor": 0.7585058808326721,
+    "peak_value": 1.0
+  },
+  "s1_ET_decoder0_header1_hires": {
+    "mass_in_tumor": 0.9999998807907104,
+    "peak_value": 1.0
+  },
+  "s1_ET_decoder0_header1_grad": {
+    "mass_in_tumor": 0.7541407942771912,
+    "peak_value": 1.0
+  },
+  "s2_TC_decoder9_upsampler_hires": {
+    "mass_in_tumor": 0.6026178598403931,
+    "peak_value": 1.0
+  },
+  "s2_TC_decoder9_upsampler_grad": {
+    "mass_in_tumor": 0.004955269396305084,
+    "peak_value": 1.0
+  },
+  "s2_TC_decoder6_upsampler_hires": {
+    "mass_in_tumor": 0.38152816891670227,
+    "peak_value": 1.0
+  },
+  "s2_TC_decoder6_upsampler_grad": {
+    "mass_in_tumor": 0.9318673014640808,
+    "peak_value": 1.0
+  },
+  "s2_TC_decoder3_upsampler_hires": {
+    "mass_in_tumor": 0.9242508411407471,
+    "peak_value": 1.0
+  },
+  "s2_TC_decoder3_upsampler_grad": {
+    "mass_in_tumor": 0.9802616834640503,
+    "peak_value": 1.0
+  },
+  "s2_TC_decoder0_header1_hires": {
+    "mass_in_tumor": 1.000000238418579,
+    "peak_value": 1.0
+  },
+  "s2_TC_decoder0_header1_grad": {
+    "mass_in_tumor": 0.9800253510475159,
+    "peak_value": 1.0
+  },
+  "s2_WT_decoder9_upsampler_hires": {
+    "mass_in_tumor": 0.3994210362434387,
+    "peak_value": 1.0
+  },
+  "s2_WT_decoder9_upsampler_grad": {
+    "mass_in_tumor": 0.02092229202389717,
+    "peak_value": 1.0
+  },
+  "s2_WT_decoder6_upsampler_hires": {
+    "mass_in_tumor": 0.5052869319915771,
+    "peak_value": 1.0
+  },
+  "s2_WT_decoder6_upsampler_grad": {
+    "mass_in_tumor": 0.9981033205986023,
+    "peak_value": 1.0
+  },
+  "s2_WT_decoder3_upsampler_hires": {
+    "mass_in_tumor": 0.012827378697693348,
+    "peak_value": 1.0
+  },
+  "s2_WT_decoder3_upsampler_grad": {
+    "mass_in_tumor": 1.0,
+    "peak_value": 1.0
+  },
+  "s2_WT_decoder0_header1_hires": {
+    "mass_in_tumor": 1.0,
+    "peak_value": 1.0
+  },
+  "s2_WT_decoder0_header1_grad": {
+    "mass_in_tumor": 0.9891631007194519,
+    "peak_value": 1.0
+  },
+  "s2_ET_decoder9_upsampler_hires": {
+    "mass_in_tumor": 0.0,
+    "peak_value": 1.0
+  },
+  "s2_ET_decoder9_upsampler_grad": {
+    "mass_in_tumor": 0.0,
+    "peak_value": 1.0
+  },
+  "s2_ET_decoder6_upsampler_hires": {
+    "mass_in_tumor": 0.0,
+    "peak_value": 1.0
+  },
+  "s2_ET_decoder6_upsampler_grad": {
+    "mass_in_tumor": 0.0,
+    "peak_value": 0.0
+  },
+  "s2_ET_decoder3_upsampler_hires": {
+    "mass_in_tumor": 0.0,
+    "peak_value": 1.0
+  },
+  "s2_ET_decoder3_upsampler_grad": {
+    "mass_in_tumor": 0.0,
+    "peak_value": 1.0
+  },
+  "s2_ET_decoder0_header1_hires": {
+    "mass_in_tumor": 0.0,
+    "peak_value": 1.0
+  },
+  "s2_ET_decoder0_header1_grad": {
+    "mass_in_tumor": 0.0,
+    "peak_value": 1.0
+  }
+}

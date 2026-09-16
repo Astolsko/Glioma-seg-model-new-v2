@@ -129,13 +129,17 @@ class BratsDataset(Randomizable, CacheDataset):
         cache_num: int = sys.maxsize,
         cache_rate: float = 1.0,
         num_workers: int = 0,
+        leak: Union[str, None] = None,
     ) -> None:
         if not os.path.isdir(root_dir) or not os.path.exists(root_dir):
             raise RuntimeError(
                 f"Cannot find dataset directory: {root_dir}."
             )
+        if leak not in LEAK_MODES:
+            raise ValueError(f"leak must be one of {LEAK_MODES}, got {leak!r}")
 
         self.section = section
+        self.leak = leak
         self.val_frac = val_frac
         self.test_frac = test_frac
         self.set_random_state(seed=seed)
@@ -168,12 +172,32 @@ class BratsDataset(Randomizable, CacheDataset):
         test_length = int(length * self.test_frac)
         if self.section == "training":
             self.indices = indices[val_length+test_length:]
+            if self.leak == "patient":
+                # DELIBERATE LEAK (cfg.data.leak): the validation patients are
+                # trained on as well. The test patients are not.
+                self.indices = np.concatenate(
+                    [self.indices, indices[test_length:val_length+test_length]])
         elif self.section == "validation":
             self.indices = indices[test_length:val_length+test_length]
         else:
             self.indices = indices[:test_length]
 
         return [datalist[i] for i in self.indices]
+
+
+# cfg.data.leak values. None is the honest split; "patient" is the deliberate
+# leak of the assignment demonstration (see config.py).
+LEAK_MODES = (None, "patient")
+
+
+def require_leak_label(run_name, leak):
+    """A run trained with a deliberate leak must say so in its name, so its
+    folder, logs and comparison tables can never pass for an honest run."""
+    if leak and "leak" not in (run_name or "").lower():
+        raise SystemExit(
+            f"cfg.data.leak={leak!r} trains on the validation patients, so the run name "
+            f"must contain 'leak' (e.g. --name v5-mamba-leak-demo). For an honest run set "
+            f"cfg.data.leak = None in config.py.")
 
 
 def build_dataloaders(cfg):
@@ -189,6 +213,7 @@ def build_dataloaders(cfg):
     print(train_transform)
 
     train_ds = BratsDataset(
+        leak=cfg.data.get("leak"),
         root_dir=cfg.paths.root_dir,
         section="training",
         transform=train_transform,
@@ -241,6 +266,15 @@ def build_dataloaders(cfg):
         sample = sample[0]
     print("image:", sample["image"].shape)
     print("label:", sample["label"].shape)
+
+    if train_ds.leak:
+        overlap = len(set(train_ds.get_indices().tolist()) & set(val_ds.get_indices().tolist()))
+        print("!" * 78)
+        print(f"DELIBERATE DATA LEAK (cfg.data.leak={train_ds.leak!r}): {overlap} of the "
+              f"{len(val_ds)} validation patients are also in the {len(train_ds)}-patient "
+              f"training set. This run's validation metrics do not measure generalisation; "
+              f"none of the {len(test_ds)} test patients is trained on.")
+        print("!" * 78)
 
     return {
         "train_ds": train_ds, "train_loader": train_loader,

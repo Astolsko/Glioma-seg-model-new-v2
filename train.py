@@ -31,7 +31,7 @@ from utils.env_check import configure_cuda_allocator, ensure_dependencies
 ensure_dependencies()
 
 from config import cfg
-from utils.dataloader import build_dataloaders
+from utils.dataloader import build_dataloaders, require_leak_label
 from utils.engine import (
     print_gpu_info, get_device, build_model, run_training, run_test,
     run_inference,
@@ -39,7 +39,7 @@ from utils.engine import (
 from utils.losses import build_loss_fn
 from utils.plot import (
     plot_data_distribution, plot_sample_modalities, plot_sample_labels,
-    plot_indexed_samples, plot_metrics_from_csv,
+    plot_indexed_samples, plot_metrics_from_csv, leak_watermark,
 )
 from utils.postprocess import save_infer_config, tune_and_save
 from utils.run_logger import RunLogger
@@ -114,6 +114,9 @@ def main():
     # Before ANY CUDA allocation — the allocator reads this once at init.
     configure_cuda_allocator(cfg.checkpoint.cuda_alloc_conf)
 
+    # Before the run folder exists, so a mislabelled leaked run never gets one.
+    require_leak_label(args.name, cfg.data.get("leak"))
+
     resume_from, reuse_dir = resolve_resume(args, cfg)
 
     with RunLogger(run_name=args.name, base_dir=cfg.paths.logs_dir,
@@ -148,7 +151,16 @@ def main():
 
         run_training(model, loaders, loss_fn, device, cfg, run_logger,
                      resume_from=resume_from)
-        plot_metrics_from_csv(run_logger.metrics_csv_path, run_logger.plots_dir)
+        # The curves can be redrawn from the CSVs at any time (tools/replot.py),
+        # so a plotting error must not cost the tuning, test and XAI stages.
+        try:
+            plot_metrics_from_csv(run_logger.metrics_csv_path, run_logger.plots_dir,
+                                  train_steps_csv_path=run_logger.train_steps_csv_path,
+                                  style={**cfg.plot,
+                                         "watermark": leak_watermark(cfg.data.get("leak"))})
+        except Exception as exc:
+            print(f"[Plot] failed ({type(exc).__name__}: {exc}); redraw with "
+                  f"`python tools/replot.py --run {os.path.basename(run_logger.run_dir)}`")
 
         if cfg.infer.tune_thresholds_after_training:
             tune_and_save(
