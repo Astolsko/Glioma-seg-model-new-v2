@@ -4,6 +4,8 @@ import os
 import numpy as np
 import torch
 import torch.nn.functional as F
+import matplotlib
+matplotlib.use("Agg")   # non-interactive backend before pyplot; see utils/plot.py
 from matplotlib import pyplot as plt
 
 from utils.metrics import minmax_normalize
@@ -12,21 +14,84 @@ from utils.metrics import minmax_normalize
 def register_attention_hook(model):
     """Registers a forward hook on the last transformer block's attention
     module and returns the cache dict the hook writes into (weights shape:
-    (B, num_heads, num_patches, num_patches))."""
-    cache = {}
+    (B, num_heads, num_patches, num_patches)).
+
+    The hook is ARMED, not always-on: it fires on every sliding-window patch of
+    every validation sample, but the map is only ever consumed on the epochs
+    that save an overlay. Capturing unconditionally meant cloning a
+    (1, heads, patches, patches) tensor tens of thousands of times per run and
+    leaving the last one resident in GPU memory for the whole run. Callers arm
+    it with `set_attention_capture(cache, True)` for the epoch they want.
+
+    The clone is moved to CPU on capture. It is consumed by
+    `extract_attention_map`, whose first move is `.cpu()` anyway, so nothing
+    downstream notices — and nothing stays pinned in the GPU pool.
+    """
+    cache = {"_capture": False}
+
+    if getattr(model, "encoder_type", "vit") == "mamba":
+        return _register_mamba_hook(model, cache)
 
     def _attention_hook(module, inputs, output):
+        if not cache.get("_capture"):
+            return
         if isinstance(output, (tuple, list)) and len(output) == 2:
             weights = output[1]
             if weights is not None:
-                cache["attn"] = weights.detach().clone()
+                cache["attn"] = weights.detach().to("cpu", copy=True)
 
     model.transformer.layer[-1].attn.register_forward_hook(_attention_hook)
     return cache
 
 
+def _register_mamba_hook(model, cache):
+    """Mamba counterpart of the hook above, on the last ToM mixer of the
+    deepest encoder stage (whose token grid is the ViT's 1/16 patch grid).
+
+    A Mamba layer returns no attention weights: its implicit ("hidden")
+    attention has to be computed from the layer's input (Ali et al. 2024, see
+    blocks/VisionMamba.py). That is far costlier than the ViT's clone and the
+    hook fires on every sliding-window patch while armed, so only the INPUT
+    tokens are kept here (overwritten each call, on CPU) and the matrix is
+    built once, lazily, in extract_attention_map for the patch that gets
+    plotted. Same "last patch of the sample" semantics as the ViT hook.
+    """
+    mixer = model.mamba_encoder.last_stage_mixers()[-1]
+
+    def _mamba_hook(module, inputs, output):
+        if not cache.get("_capture"):
+            return
+        cache["mamba_tokens"] = inputs[0].detach().to("cpu", copy=True)
+        cache["mamba_nslices"] = int(inputs[1])
+        cache["mamba_mixer"] = module
+
+    mixer.register_forward_hook(_mamba_hook)
+    return cache
+
+
+_CAPTURE_KEYS = ("attn", "mamba_tokens", "mamba_nslices", "mamba_mixer")
+
+
+def set_attention_capture(cache, enabled):
+    """Arm or disarm the capture hook. Disarming also drops the cached map, so
+    a saved overlay does not keep a tensor alive for the rest of the run."""
+    if cache is None:
+        return
+    cache["_capture"] = bool(enabled)
+    if not enabled:
+        for key in _CAPTURE_KEYS:
+            cache.pop(key, None)
+
+
 def extract_attention_map(cache, model, img_shape):
     attn = cache.get("attn")
+    if attn is None and cache.get("mamba_tokens") is not None:
+        # (B, L, L) hidden attention -> (B, 1, L, L): one "head", so the
+        # reduction below is the same "average attention each token receives".
+        mixer = cache["mamba_mixer"]
+        device = next(mixer.parameters()).device
+        attn = mixer.hidden_attention(cache["mamba_tokens"].to(device),
+                                      cache["mamba_nslices"])[:, None]
     if attn is None:
         return None
     attn = attn.detach().cpu()
@@ -96,8 +161,11 @@ def save_attention_overlay(cache, model, val_data, val_ds, epoch, img_shape, att
         gridspec_kw={"hspace": 0.05, "wspace": 0.03}
     )
     fig.patch.set_facecolor("#0d0d0d")
+    map_name = ("Mamba Hidden-Attention Map (deepest stage)"
+                if getattr(model, "encoder_type", "vit") == "mamba"
+                else "Transformer Attention Map")
     fig.suptitle(
-        f"{patient_id}  |  Transformer Attention Map  |  Epoch {epoch}",
+        f"{patient_id}  |  {map_name}  |  Epoch {epoch}",
         color="white", fontsize=13, fontweight="bold", y=0.50
     )
 

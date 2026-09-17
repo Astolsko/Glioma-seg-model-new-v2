@@ -1,0 +1,189 @@
+{
+  "paths": {
+    "root_dir": "/DATA/Abul Hasan/Glioma Revision/data/combined",
+    "logs_dir": "logs"
+  },
+  "epoch": 60,
+  "learning_rate": 0.0001,
+  "weight_decay": 0.0001,
+  "patience": 50,
+  "grad_clip_norm": 1.0,
+  "val_interval": 1,
+  "val_amp": true,
+  "seed": 0,
+  "warmup_epochs": 5,
+  "ema_decay": 0.999,
+  "train_oom_skip_limit": 5,
+  "val_oom_skip_limit": 5,
+  "checkpoint": {
+    "save_last_every_epoch": true,
+    "gc_every_n_val_steps": 20,
+    "cuda_alloc_conf": "expandable_segments:True"
+  },
+  "data": {
+    "val_frac": 0.15,
+    "test_frac": 0.1,
+    "cache_rate": 0.0,
+    "batch_size_train": 1,
+    "batch_size_val": 1,
+    "batch_size_test": 1,
+    "num_workers_train": 4,
+    "num_workers_val": 4,
+    "num_workers_test": 0,
+    "leak": "patient"
+  },
+  "crop": {
+    "fg_threshold": 0,
+    "pos": 2,
+    "neg": 1,
+    "num_samples": 2
+  },
+  "unetr": {
+    "img_shape": [
+      128,
+      128,
+      96
+    ],
+    "input_dim": 4,
+    "output_dim": 3,
+    "patch_size": 16,
+    "embed_dim": 768,
+    "num_layers": 12,
+    "num_heads": 12,
+    "mlp_dim": 2048,
+    "extract_layers": [
+      3,
+      6,
+      9,
+      12
+    ],
+    "dropout": 0.2,
+    "encoder": "mamba"
+  },
+  "mamba": {
+    "dims": [
+      48,
+      96,
+      192,
+      384
+    ],
+    "depths": [
+      2,
+      2,
+      2,
+      2
+    ],
+    "d_state": 16,
+    "d_conv": 4,
+    "expand": 2,
+    "dropout": 0.2
+  },
+  "loss": {
+    "dice_weight": 0.5,
+    "tversky_weight": 0.3,
+    "hausdorff_weight": 0.2,
+    "tversky_alpha": 0.7,
+    "tversky_beta": 0.3,
+    "tversky_gamma": 1.3333333333333333,
+    "hd_anneal_frac": 0.5,
+    "aux_z6_weight": 0.3,
+    "aux_z3_weight": 0.15
+  },
+  "metrics": {
+    "voxel_spacing": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "auc_every_n_epochs": 10
+  },
+  "infer": {
+    "sw_overlap": 0.75,
+    "val_sw_overlap": 0.5,
+    "sw_mode": "gaussian",
+    "tta_flips": true,
+    "thresholds": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "tune_thresholds_after_training": true,
+    "min_component_voxels": [
+      0,
+      0,
+      176
+    ],
+    "min_total_voxels": [
+      0,
+      0,
+      352
+    ]
+  },
+  "plot": {
+    "font_family": "serif",
+    "font_size": 12,
+    "fig_size": [
+      7.0,
+      4.5
+    ],
+    "dpi": 150,
+    "formats": [
+      "png"
+    ],
+    "epoch_smoothing": 0.3,
+    "step_smoothing": 0.9
+  },
+  "attention": {
+    "enabled": true,
+    "every_n_epochs": 10,
+    "sample_idx": 0
+  },
+  "visualization": {
+    "sample_index": 27,
+    "extra_indices": [
+      0,
+      5,
+      10,
+      15,
+      20
+    ]
+  },
+  "xai": {
+    "run_after_training": true,
+    "components": [
+      "cam",
+      "modality",
+      "uncertainty",
+      "rollout",
+      "faithful"
+    ],
+    "sample_indices": [
+      0,
+      1,
+      2
+    ],
+    "cam_layers": [
+      "decoder9_upsampler",
+      "decoder6_upsampler",
+      "decoder3_upsampler",
+      "decoder0_header.1"
+    ],
+    "cam_methods": [
+      "hires",
+      "grad"
+    ],
+    "cam_roi": "gt",
+    "mc_passes": 10,
+    "deletion_fractions": [
+      0.0,
+      0.01,
+      0.02,
+      0.05,
+      0.1,
+      0.2,
+      0.5
+    ],
+    "localization_top_frac": 0.05,
+    "peritumoral_radius": 5
+  }
+}

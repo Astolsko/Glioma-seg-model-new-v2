@@ -65,6 +65,9 @@ def tiny_unetr_kwargs(monkeypatch):
         patch_size=16,
         num_heads=4,
         dropout=0.0,
+        # Explicit: config.py may select "mamba" for the next run, and every
+        # test built on this fixture is a ViT test.
+        encoder="vit",
     )
     monkeypatch.setattr(cfg.unetr, "num_layers", 4, raising=True)
     monkeypatch.setattr(cfg.unetr, "extract_layers", [1, 2, 3, 4], raising=True)
@@ -79,6 +82,30 @@ def tiny_unetr_kwargs(monkeypatch):
 def tiny_unetr(tiny_unetr_kwargs):
     from models.unetr import UNETR
     return UNETR(**tiny_unetr_kwargs)
+
+
+# Toy-width SegMamba encoder. The last depth is 2 like the real config, so the
+# deepest stage has two layers for the hidden-attention rollout to multiply.
+TINY_MAMBA = dict(dims=[8, 16, 32, 64], depths=[1, 1, 1, 2], d_state=4, d_conv=4,
+                  expand=2, dropout=0.0)
+
+
+@pytest.fixture
+def tiny_mamba_kwargs(tiny_unetr_kwargs, monkeypatch):
+    """tiny_unetr_kwargs with the SegMamba encoder swapped in. Also patches
+    cfg.mamba/cfg.unetr.encoder so build_model() sees the same model."""
+    from config import cfg
+    for key, value in TINY_MAMBA.items():
+        monkeypatch.setattr(cfg.mamba, key, value, raising=True)
+    monkeypatch.setattr(cfg.unetr, "encoder", "mamba", raising=True)
+    return dict(tiny_unetr_kwargs, encoder="mamba", mamba_kwargs=dict(TINY_MAMBA))
+
+
+@pytest.fixture
+def tiny_mamba_unetr(tiny_mamba_kwargs):
+    from models.unetr import UNETR
+    torch.manual_seed(0)
+    return UNETR(**tiny_mamba_kwargs)
 
 
 @pytest.fixture

@@ -18,6 +18,7 @@ torch = pytest.importorskip("torch")
 from utils.plot import (
     plot_data_distribution, plot_sample_modalities, plot_sample_labels,
     plot_indexed_samples, plot_test_qualitative, plot_metrics_from_csv,
+    smooth_series,
 )
 
 
@@ -131,3 +132,87 @@ def test_plot_metrics_from_csv_handles_missing_or_blank_values(tmp_path):
     plot_metrics_from_csv(str(csv_path), plots_dir)  # should not raise
 
     assert os.path.exists(os.path.join(plots_dir, "loss.png"))
+
+
+def test_smooth_series_with_zero_weight_returns_the_values_unchanged():
+    values = [3.0, 1.0, 4.0, 1.0, 5.0]
+    assert smooth_series(values, 0.0) == values
+
+
+def test_smooth_series_is_bias_corrected():
+    """Without the 1 - weight^n correction the first points are dragged toward
+    zero, which draws a fake steep drop at the start of every curve."""
+    assert smooth_series([2.0] * 5, 0.9) == pytest.approx([2.0] * 5)
+
+
+def test_smooth_series_keeps_nan_gaps_and_does_not_advance_over_them():
+    out = smooth_series([1.0, float("nan"), 3.0], 0.5)
+    assert len(out) == 3
+    assert out[1] != out[1]
+    # 3.0 is blended with 1.0 alone, as the second real point
+    assert out[2] == pytest.approx((0.5 * 0.5 * 1.0 + 0.5 * 3.0) / (1 - 0.5 ** 2))
+
+
+@pytest.mark.parametrize("weight", [-0.1, 1.0])
+def test_smooth_series_rejects_weights_outside_0_1(weight):
+    with pytest.raises(ValueError):
+        smooth_series([1.0], weight)
+
+
+def test_plot_metrics_from_csv_draws_step_curves_in_every_requested_format(tmp_path):
+    metrics = tmp_path / "metrics.csv"
+    fields = ["epoch", "lr", "train_loss", "val_loss", "dice_tc", "dice_wt", "dice_et",
+              "mean_dice", "iou_tc", "iou_wt", "iou_et", "mean_iou", "mean_hd95"]
+    _write_metrics_csv(metrics, fields, [
+        {"epoch": e, "lr": 1e-4 / e, "train_loss": 1.0 / e, "val_loss": 1.1 / e,
+         "dice_tc": 0.5, "dice_wt": 0.6, "dice_et": 0.4, "mean_dice": 0.5,
+         "iou_tc": 0.4, "iou_wt": 0.5, "iou_et": 0.3, "mean_iou": 0.4, "mean_hd95": 9.0}
+        for e in range(1, 4)
+    ])
+    steps = tmp_path / "train_steps.csv"
+    _write_metrics_csv(steps, ["epoch", "step", "loss", "loss_main"], [
+        {"epoch": e, "step": s, "loss": 1.0 / e + 0.01 * s, "loss_main": 0.8 / e}
+        for e in range(1, 4) for s in range(1, 6)
+    ])
+
+    plots_dir = str(tmp_path / "plots")
+    plot_metrics_from_csv(str(metrics), plots_dir, train_steps_csv_path=str(steps),
+                          style={"formats": ("png", "pdf"), "epoch_smoothing": 0.3,
+                                 "step_smoothing": 0.9, "font_size": 16})
+
+    for stem in ("loss", "dice", "iou", "hd95", "lr", "loss_steps"):
+        for fmt in ("png", "pdf"):
+            assert os.path.exists(os.path.join(plots_dir, f"{stem}.{fmt}")), f"{stem}.{fmt}"
+
+
+def test_plot_metrics_from_csv_does_not_leak_its_style_into_global_rcparams(tmp_path):
+    """train.py keeps plotting after the curves (test visualisations, XAI
+    figures); a font size chosen for the curves must not follow them there."""
+    csv_path = tmp_path / "metrics.csv"
+    _write_metrics_csv(csv_path, ["epoch", "train_loss"], [{"epoch": 1, "train_loss": 1.0}])
+    before = matplotlib.rcParams["font.size"]
+
+    plot_metrics_from_csv(str(csv_path), str(tmp_path / "plots"),
+                          style={"font_size": before + 7})
+
+    assert matplotlib.rcParams["font.size"] == before
+
+
+def test_plot_metrics_from_csv_stamps_the_leak_watermark_on_every_figure(tmp_path, monkeypatch):
+    from matplotlib.axes import Axes
+    from utils.plot import leak_watermark
+
+    csv_path = tmp_path / "metrics.csv"
+    _write_metrics_csv(csv_path, ["epoch", "train_loss", "mean_dice"],
+                       [{"epoch": 1, "train_loss": 1.0, "mean_dice": 0.5}])
+    stamped = []
+    real_text = Axes.text
+    monkeypatch.setattr(Axes, "text",
+                        lambda self, *a, **k: stamped.append(a[2]) or real_text(self, *a, **k))
+
+    plot_metrics_from_csv(str(csv_path), str(tmp_path / "plots"),
+                          style={"watermark": leak_watermark("patient")})
+
+    assert leak_watermark(None) is None
+    assert len(stamped) == 2   # loss.png and dice.png
+    assert all("LEAKED SPLIT" in text for text in stamped)

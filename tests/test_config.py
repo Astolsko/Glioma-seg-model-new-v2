@@ -75,6 +75,19 @@ def test_inference_settings_have_one_entry_per_output_channel():
         )
     assert all(0.0 < t < 1.0 for t in cfg.infer.thresholds)
     assert 0.0 <= cfg.infer.sw_overlap < 1.0
+    assert 0.0 <= cfg.infer.val_sw_overlap < 1.0
+
+
+def test_plot_smoothing_weights_are_valid_ema_weights():
+    # utils.plot.smooth_series raises outside [0, 1), and the plots are drawn at
+    # the end of a ~45h run, just before threshold tuning and the test pass.
+    assert 0.0 <= cfg.plot.epoch_smoothing < 1.0
+    assert 0.0 <= cfg.plot.step_smoothing < 1.0
+
+
+def test_data_leak_is_a_known_mode():
+    # utils.dataloader.LEAK_MODES; checked here too so a typo fails before a run.
+    assert cfg.data.leak in (None, "patient")
 
 
 def test_warmup_fits_inside_the_training_schedule():

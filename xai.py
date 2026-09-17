@@ -7,7 +7,8 @@ Components (see utils/xai.py for the reasoning behind each):
     cam         X1  Seg-Grad-CAM / HiResCAM at four decoder depths
     modality    X2  Dice cost of ablating each MRI modality
     uncertainty X3  MC-dropout maps + error-retention curve
-    rollout     X4  Attention rollout through the 12 ViT blocks
+    rollout     X4  Attention rollout through the 12 ViT blocks, or for a Mamba run
+                    the hidden-attention rollout of its deepest stage
     faithful    X5  Deletion curves, localisation scores, randomisation sanity check
 
 Writes figures, per-component JSON and a summary.json into logs/<run>/xai/.
@@ -25,7 +26,7 @@ ensure_dependencies()
 
 from config import cfg
 from utils.dataloader import build_dataloaders
-from utils.engine import build_model, get_device, run_inference
+from utils.engine import apply_run_model_config, build_model, get_device, run_inference
 from utils import xai
 
 
@@ -43,6 +44,7 @@ def main():
     if not os.path.exists(checkpoint_path):
         raise SystemExit(f"No checkpoint at {checkpoint_path}")
 
+    apply_run_model_config(cfg, run_dir)   # the encoder this run was trained with
     device = get_device()
     model = build_model(cfg, device)
     loaders = build_dataloaders(cfg)

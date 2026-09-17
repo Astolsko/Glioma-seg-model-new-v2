@@ -33,6 +33,8 @@ class CombinedLoss:
         )
         self.hausdorff = HausdorffDTLoss(to_onehot_y=False, sigmoid=True)
         self._hd_scale = 1.0  # full unless set_epoch() anneals it (train loop)
+        # Unweighted terms of the most recent __call__, for the per-step CSVs.
+        self.last_terms = {}
 
     def set_epoch(self, epoch, total_epochs):
         """Linear anneal: HD weight ramps 0 -> full over the first
@@ -49,6 +51,13 @@ class CombinedLoss:
         l_dice = self.dice(outputs, labels)
         l_ft = self._focal_tversky(outputs, labels.float())
         l_hd = self.hausdorff(outputs, labels)
+        # Detached, so logging them can never keep the autograd graph alive.
+        self.last_terms = {
+            "loss_dice": l_dice.detach(),
+            "loss_focal_tversky": l_ft.detach(),
+            "loss_hausdorff": l_hd.detach(),
+            "hd_scale": self._hd_scale,
+        }
         return (
             self.cfg.loss.dice_weight * l_dice
             + self.cfg.loss.tversky_weight * l_ft
@@ -90,9 +99,20 @@ def combine_main_and_aux(loss_function, outputs, aux_z6, aux_z3, labels, cfg):
     Falls back to calling `loss_function` itself when it exposes no `aux_loss`
     attribute, so a plain callable still works (the tests rely on this).
     """
+    return main_and_aux_losses(loss_function, outputs, aux_z6, aux_z3, labels, cfg)[0]
+
+
+def main_and_aux_losses(loss_function, outputs, aux_z6, aux_z3, labels, cfg):
+    """combine_main_and_aux's three pieces, kept apart so the per-step CSV can
+    log the main-head loss — the only part computed the same way as val_loss —
+    next to the total that is actually optimised.
+
+    Returns (total, main, aux_z6_loss, aux_z3_loss): total is weighted exactly
+    as combine_main_and_aux documents; the two aux losses are unweighted.
+    """
     aux_loss_fn = getattr(loss_function, "aux_loss", loss_function)
-    return (
-        loss_function(outputs, labels)
-        + cfg.loss.aux_z6_weight * aux_loss_fn(aux_z6, labels)
-        + cfg.loss.aux_z3_weight * aux_loss_fn(aux_z3, labels)
-    )
+    main = loss_function(outputs, labels)
+    l_z6 = aux_loss_fn(aux_z6, labels)
+    l_z3 = aux_loss_fn(aux_z3, labels)
+    total = main + cfg.loss.aux_z6_weight * l_z6 + cfg.loss.aux_z3_weight * l_z3
+    return total, main, l_z6, l_z3

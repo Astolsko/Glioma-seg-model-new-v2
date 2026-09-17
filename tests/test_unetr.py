@@ -97,6 +97,7 @@ def test_unetr_real_config_forward_smoke(device):
         patch_size=cfg.unetr.patch_size,
         num_heads=cfg.unetr.num_heads,
         dropout=cfg.unetr.dropout,
+        encoder="vit",      # this is the ViT's full-size test; the Mamba one lives in test_vision_mamba.py
     ).to(device).eval()
 
     x = torch.randn(1, cfg.unetr.input_dim, *cfg.unetr.img_shape, device=device)

@@ -14,24 +14,395 @@ Baseline to beat (`logs/v1-run3`, 50 ep) — HD95 here is in the OLD, WRONG unit
 - Test Dice: 0.817 / 0.892 / 0.818 / 0.842
 - Test HD95 (mm): 9.10 / 3.97 / **39.7** / 17.6
 
-Current state (`logs/run1-new-version`, 100 ep, EMA weights @ ep91), HD95 in
-CORRECT units, test pass with TTA + tuned thresholds + post-processing:
-- Val Dice (best ep91): 0.818 / 0.880 / **0.730** / 0.809
-- Test Dice: 0.848 / 0.894 / **0.753** / 0.832
-- Test HD95 (mm): 4.55 / 4.63 / 24.50 / 11.22
-- Test HD95 **excluding empty-mismatch patients**: 4.55 / 4.63 / **3.65**
-- 19.6 min/epoch (baseline: 42.0)
+Current state, ViT encoder (`logs/v2-run3`, native 1mm, 50 ep, best ep41), HD95
+in CORRECT units, test pass with TTA + tuned thresholds + post-processing:
+- Val Dice (best ep41): 0.861 / 0.900 / **0.790** / 0.850 (0.841 mean at ep30)
+- Test Dice: 0.878 / 0.911 / **0.816** / 0.868
+- Test HD95 (mm): 3.94 / 4.84 / **45.76** / 18.18 (ET is sentinel-dominated)
+- Test HD95 **excluding empty-mismatch patients**: ET **3.51**; n_halluc/n_miss ET 6/2
+- Test ET sensitivity 0.760; 41.8 min/epoch, 35.1 h total
+- (Previous: `logs/run1-new-version`, resized, test Dice 0.832 mean. Do NOT
+  compare 1mm runs to the resized ones.)
 
-> **Next up:** the native-1mm run. Code is built + verified on branch
-> `native-1mm-run` (NOT merged to main). See the handoff section directly below.
+Current state, Mamba encoder (`logs/v3-mamba-30ep`, SegMamba, native 1mm, 30 ep,
+best ep23), same test recipe:
+- Val Dice (best ep23): 0.881 / 0.911 / **0.810** / 0.868 (0.864 mean at ep30)
+- Test Dice: 0.867 / 0.915 / **0.819** / 0.867
+- Test HD95 (mm): 10.12 / 5.82 / **35.16** / 17.03 (TC: 1 missed patient; ET 4 halluc + 2 miss)
+- Test HD95 clean: TC 4.84, WT 5.82, ET **3.62**
+- Test ET sensitivity 0.764; 44.8 min/epoch, 22.4 h training; 102.1M params (encoder 15.7M)
+- **Paired vs the ViT on the same 70 test patients: mean Dice -0.0015
+  [-0.0108, +0.0052], a tie.** Details in Session 7.
+
+> **Next up:** Session 7 read the Mamba run, then ran the val-selected ET
+> operating point, the paired statistics and the full-test modality ablation.
+> Start at the Session 7 entry's "Open items". Commands are in `RUN.md` sections 6 and 7.
 
 ---
 
-## NEXT SESSION — START HERE: launch / read the native-1mm run
+## 2026-09-14 — Session 8: 60 epochs, test overlap 0.75, per-step CSVs + replot; duplicate patients found
 
-The native-1mm training run is **built, tested, and ready** but was **PENDING
-LAUNCH** at the end of Session 5 (user was reviewing the diff). Everything about
-*why* is in the Session-5 entry below; this section is the *operational* handoff.
+- **Data finding (data left as is, user's decision):** `data/combined` holds
+  369 `BraTS20_Training_*` + 334 `BraTS19_*` cases, and every BraTS19 case is an
+  identical copy of a BraTS20 case (same seg label counts; FLAIR arrays
+  identical on the 3 pairs checked). The seed-0 split puts the twin of 72/105
+  val and 55/70 test patients in train. Test Dice (TC/WT/ET) for the 15 test
+  patients with no twin in train vs the 55 with one: ViT 0.904/0.913/0.824 vs
+  0.871/0.910/0.814; Mamba 0.899/0.912/0.817 vs 0.858/0.916/0.820. No detectable
+  gain from the twins, but n=15 leaves wide error bars.
+- **config.py:** `epoch` 30 → 60, `warmup_epochs` 3 → 5. `infer.sw_overlap`
+  0.5 → 0.75 (threshold tuning + test). New `infer.val_sw_overlap = 0.5` keeps
+  per-epoch validation at its old cost; 0.75 there would add an estimated day
+  over 60 epochs. New `cfg.plot` section: font, size, dpi, formats, and EMA
+  smoothing (0.3 per epoch, 0.9 per step).
+- **New CSVs** (RUN.md §8): `train_steps.csv` has one row per optimizer step
+  (total, main-head, aux and per-term losses, lr). `val_steps.csv` has one row
+  per val patient per epoch (loss + terms, every metric per region). Both are
+  resume-safe like metrics.csv.
+- **Plots** are drawn from the CSVs, and `tools/replot.py` redraws any run.
+  Smoothing is applied only when drawing, with the raw curve faint underneath
+  and the weight on the figure. `loss.png` adds the main-head train loss, since
+  `train_loss` includes the deep-supervision heads and `val_loss` does not. New
+  `lr.png` and `loss_steps.png`; IoU and HD95 now plotted per region. The plot
+  style no longer leaks into global rcParams, so XAI figures drawn later keep
+  matplotlib defaults. A plotting error no longer aborts train.py before
+  tuning/test.
+- **Comparability:** a 60-epoch run tested at 0.75 overlap differs from
+  `v2-run3` / `v3-mamba-30ep` on both counts. `python evaluate.py --run <old>`
+  now also runs at 0.75, which separates the overlap effect without retraining.
+- **Deliberate leak for an assignment demo (user's requirement):**
+  `cfg.data.leak = "patient"` adds every val patient to the training set
+  (`BratsDataset._split_datalist`); test is untouched. Labelled by design: the
+  run name must contain "leak", log banner, config snapshot, watermarked plots.
+  Set `None` for honest runs. RUN.md §9.
+
+## 2026-09-13 — Session 7: Mamba run read out; ET knee on val; paired ViT vs Mamba stats
+
+`v3-mamba-30ep` finished cleanly at 2026-09-13 00:28 IST. Training ended at 23:36;
+tuning, the test pass and all 5 XAI components followed. No restarts, 0 allocator
+retries, 0 OOMs, peak 22.6 GB. **44.8 min/epoch, not the smoke test's 56**
+(ViT 41.8, so Mamba is 7% slower per epoch); 22.4 h of training vs the ViT's 34.9 h.
+
+**Readout** (`logs/compare_v2-run3_vs_v3-mamba-30ep/{summary.md,curves.png}`).
+- Val: Mamba is above the ViT at every epoch from ep 2. At ep 30 it has 0.864 vs
+  0.841 mean (TC +0.028, WT +0.017, ET +0.024). It passes the ViT's 50-epoch
+  best (0.8504) at ep 15 (0.8518), peaks at ep 23 (0.8676) and stays flat after.
+- Test at the shipped point (sweep thresholds 0.15/0.10/0.05, TTA, cleanup
+  176/352): 0.867 / 0.915 / 0.819 / 0.867, vs the ViT's 0.878 / 0.911 / 0.816 /
+  0.868. **The val lead does not carry over to test.**
+
+**New tools** (`RUN.md` section 7).
+- `tools/cache_predictions.py` caches each run's TTA probabilities on val and
+  test, using the run's own checkpoint, env and infer_config, plus a per-patient
+  modality ablation on test.
+- `tools/operating_point_study.py` scores the cache on CPU.
+- Outputs: `logs/compare_v2-run3_vs_v3-mamba-30ep/operating_point_study.{md,json}`
+  and `logs/<run>/eval/per_patient_test.csv`.
+- Anchors: the cache reproduces both runs' `testing/test_metrics.csv`. Dice,
+  sens and IoU agree within 1e-4, HD95 within 0.007 mm (two GPU inference passes
+  are not bit-identical), and the hallucination/miss counts exactly. The
+  modality anchor reproduces both in-train log tables to 1e-4.
+- The ~17 GB cache lived in the session scratchpad; rebuild it with the tool.
+
+**Paired test comparison, Mamba minus ViT, same 70 patients, shipped points**
+(95% bootstrap CI, Wilcoxon signed-rank p):
+
+| metric | ViT | Mamba | diff [95% CI] | p |
+|---|---|---|---|---|
+| mean Dice | 0.8684 | 0.8669 | -0.0015 [-0.0108, +0.0052] | — |
+| Dice TC | 0.8782 | 0.8669 | -0.0112 [-0.0372, +0.0051] | 0.154 |
+| Dice WT | 0.9109 | 0.9148 | +0.0038 [+0.0011, +0.0067] | 0.006 |
+| Dice ET | 0.8161 | 0.8191 | +0.0029 [-0.0034, +0.0096] | 0.248 |
+| mean HD95 (mm) | 18.18 | 17.03 | -1.15 [-7.43, +4.71] | — |
+| HD95 TC | 3.94 | 10.11 | +6.17 [-0.12, +17.62] | 0.975 |
+| HD95 WT | 4.84 | 5.82 | +0.98 [-0.25, +3.14] | 0.571 |
+| HD95 ET | 45.76 | 35.16 | -10.60 [-27.14, +0.85] | 0.101 |
+| HD95 ET, clean in both (n=60) | 3.51 | 3.62 | +0.10 [-1.65, +2.59] | 0.279 |
+
+- **Verdict: a tie on test.** Only WT Dice is nominally significant (+0.004,
+  p=0.006), and it does not survive Bonferroni over the 9 per-channel tests
+  (0.0056).
+- The test gaps each come down to one or two patients:
+  - **TC Dice -0.011 and TC HD95 +6.2 mm are one patient, `BraTS19_TCIA13_650_1`.**
+    Mamba segments its WT (Dice 0.818) but labels none of the 9,759-voxel GT core
+    as TC (max TC prob inside GT < 0.0005). The ViT gets TC Dice 0.783, and
+    0.783/70 ≈ 0.011. This tumour has almost no enhancement (125 ET voxels).
+  - **ET HD95 -10.6 mm is two patients the ViT hallucinates and Mamba does not:**
+    `BraTS19_TCIA09_254_1` (592 vox) and `BraTS20_Training_294` (376 vox), both
+    just above min_total 352. 2 x 374 / 70 = 10.7.
+- Failures both encoders share:
+  - **4 ET-negative patients get thousands of predicted ET voxels from both**
+    (ViT/Mamba): `BraTS19_2013_29_1` 577/858, `BraTS19_TCIA09_402_1` 5512/5764,
+    `BraTS20_Training_312` 4328/5242, `BraTS20_Training_263` 2480/2541. When two
+    different encoders agree on blobs this large, check the labels before
+    calling them model errors.
+  - `BraTS19_TCIA10_632_1` (GT ET 109 vox): both models have prob 1.0 inside GT,
+    and min_total=352 zeroes it. `BraTS19_TCIA13_650_1`'s ET (125 vox) goes the
+    same way for the ViT (max prob 0.993). **3 of the 4 ET misses are caused by
+    the cleanup.**
+
+**ET operating point chosen on VALIDATION.** The rule was fixed in the script
+before test was read; Session 5 took its knee from a test grid.
+
+| run | val knee | test at shipped | test at val knee |
+|---|---|---|---|
+| ViT | 0.20 (val 3h+5m -> 1h+5m) | 6h+2m, ET HD95 45.76, mean Dice 0.8684 | 5h+2m, ET HD95 40.29, mean Dice 0.8687 |
+| Mamba | 0.05 = shipped (val flat at 2h+6m for every threshold) | 4h+2m, 35.16, 0.8669 | unchanged |
+
+- **Val cannot calibrate hallucination suppression.** It has 5/105 ET-negative
+  patients, against test's 8/70. For both runs val's lowest-HD95 point is NO
+  cleanup, because val's 5-6 misses are small real ETs that min_total zeroes. On
+  test that point is worse (8 hallucinated). The cleanup's net effect flips
+  between the two splits.
+- At the val knee the paired result does not change: mean Dice -0.0018
+  [-0.0111, +0.0049], ET HD95 -5.1 mm [-16.8, +1.6], p=0.14.
+- The test grid is shown for transparency only: both models bottom out at
+  3h+2m (ViT from threshold 0.40, Mamba from 0.45).
+- Recommendation: headline the shipped points, which is the protocol both runs
+  were produced with, and give the ViT val knee as a sensitivity row. Do not
+  pick anything from the test grid.
+
+**Modality ablation over the whole test split** (n=70, empty-GT skipped, 95%
+CI). The in-train XAI covers the same 70 patients but scores both-empty as 1.0;
+its log tables are reproduced exactly.
+
+| removed | ViT TC / WT / ET | Mamba TC / WT / ET | Mamba - ViT (p) |
+|---|---|---|---|
+| FLAIR | -0.635 / -0.748 / -0.623 | -0.192 / -0.339 / -0.122 | +0.44 / +0.41 / +0.50 (all <0.001) |
+| T1ce | -0.556 / -0.084 / -0.825 | -0.441 / -0.054 / -0.827 | +0.12 (<0.001) / +0.03 (0.37) / -0.00 (0.10) |
+| T1 | -0.102 / -0.045 / -0.072 | -0.082 / -0.048 / -0.083 | n.s. |
+| T2 | -0.080 / -0.036 / -0.060 | -0.020 / -0.012 / -0.015 | +0.06 / +0.02 / +0.05 (all <=0.003) |
+
+- G6 passes for both. ET collapses without T1ce (-0.83 in both), and removing
+  FLAIR causes each model's largest WT drop.
+- **This is the largest and clearest difference between the encoders, larger
+  than anything in Dice.** The ViT uses FLAIR for every region: without it, ET
+  drops -0.62, although ET is defined on T1ce. Mamba's reliance is
+  region-specific (ET without FLAIR -0.12), and it degrades far less when FLAIR
+  or T2 is missing.
+- Mamba's relatively heavier T1ce reliance for TC is consistent with its TC miss
+  on the barely-enhancing `TCIA13_650_1`. That is a hypothesis; nothing here tests it.
+- Caveat: a zeroed sequence is an out-of-distribution input, and neither model
+  was trained with modality dropout. This measures reliance, not importance.
+
+**Correction to Session 6 and to compare_runs' XAI rows.** Every file in
+`logs/v2-run3/xai/*.json` was rewritten on 2026-08-18 between 10:28 and 10:40 by
+a standalone `xai.py` pass, after the run finished at 08:28, and standalone
+xai.py does not load the tuned thresholds. So v2-run3's `modality.json` is NOT the
+in-train result. Session 6 quoted it as -FLAIR WT -0.761 and -T1ce ET -0.645; the
+in-train log says -0.748 and -0.673.
+
+**Other XAI** (3 samples; use as figures, not as claims).
+- **Randomisation check:** SSIM stays flat for both models (Mamba 0.959-0.963,
+  ViT 0.966). This is Session 4's G4/G5 artefact: the CAM support is pinned to the
+  GT ROI, and SSIM is dominated by background. It says nothing about either
+  encoder; still void.
+- **CAM deletion AUC:** Mamba 0.054-0.058 vs random 0.754; ViT 0.040-0.041 vs
+  0.703.
+- **Rollout:** Mamba's hidden-attention rollout scores 0.708 vs random 0.754,
+  lower in 8 of 9 cases but only just (e.g. 0.905 vs 0.927). The ViT's attention
+  rollout scores 0.455 vs 0.703. Mamba's rollout is barely better than random;
+  do not lean on it.
+- **MC-dropout,** after referring the 2% most uncertain voxels: TC 0.901->0.968,
+  WT 0.878->0.922, ET 0.530->0.624. ViT: 0.883->0.959, 0.857->0.913, 0.506->0.591.
+
+**Open items.**
+1. Look at the 4 shared ET "hallucinations" and at `BraTS19_TCIA13_650_1`
+   (image, GT, both predictions) before writing about any of them.
+2. min_total=352 caused 3 of the 4 ET misses (real ETs of 109-125 voxels).
+   Retuning it needs a split with more ET-negative patients than val's 5
+   (e.g. CV folds); it cannot be tuned honestly on val.
+3. There is still no matched-budget (30-epoch) ViT. The val curves favour
+   Mamba at every epoch, but the two schedules differ.
+4. `xai.py` still ignores `eval/infer_config.json` (Session 6 open item). It
+   has now demonstrably overwritten one run's in-train XAI with untuned numbers.
+5. Nothing is committed: Sessions 5-7 are all uncommitted on `native-1mm-run`.
+
+---
+
+## 2026-09-12 — Session 6: swappable encoder, SegMamba vs ViT; 30-epoch Mamba run LAUNCHED
+
+User decisions: replace the ViT encoder with a Vision Mamba encoder **as a
+swappable block** (keep the ViT for comparison), accurate to how Mamba is used
+in brain-tumour papers -> **SegMamba** (Xing et al., MICCAI 2024, BraTS 2023);
+**30 epochs**; **no matched ViT rerun** (compare against `v2-run3`, 50 ep);
+Mamba kernels via a **separate `mamba` conda env**, not a source build.
+
+**Why a new env, and why torch 2.6 (not 2.10).** Every mamba_ssm/causal_conv1d
+wheel after v2.2.4/v1.5.0.post8 was built on Ubuntu 22.04 and needs glibc >=
+2.32; this box has 2.31 (import fails "GLIBC_2.32 not found"). v2.2.4 was built
+on 20.04 (objdump: needs GLIBC_2.14) and tops out at torch 2.6. `mamba` =
+pytorch2's exact pins with torch 2.6.0+cu124, torchvision 0.21, triton 3.2,
+sympy 1.13.1, torch 2.6's nvidia-*-12.4 pins, + mamba_ssm 2.2.4,
+causal_conv1d 1.5.0.post8, einops, ninja, transformers 4.46.3. Recreate with
+`tools/setup_mamba_env.sh`. (Gotchas hit: conda's notices cache is corrupt ->
+`CONDA_NUMBER_CHANNEL_NOTICES=0`; pytorch2 itself violates medpy's numpy pin, so
+the pins are installed `--no-deps`.)
+
+**Code.**
+- `blocks/VisionMamba.py` (new): SegMamba MambaEncoder — stem 7^3/s2, GSC,
+  2 x MambaLayer per stage at 48/96/192/384, InstanceNorm + MlpChannel outputs,
+  tri-orientated Mamba (fwd / bwd / inter-slice scans, shared in/out proj).
+  Deviations: dropout (cfg.mamba.dropout=0.2, for MC-dropout parity — SegMamba
+  has none); upstream `mamba_inner_fn` per branch instead of the fork's
+  no-out-proj variant (same function, out_proj is bias-free and per token).
+  Also: exact chunked reference scan (CPU/tests) and Ali et al. 2024 hidden
+  attention.
+- `models/unetr.py`: `encoder="vit"|"mamba"`. Mamba stages feed the SAME
+  decoder via SegMamba's own skip blocks (UnetrBasicBlock) at 1/2, 1/4, 1/8 and
+  a 768-ch 1/16 block into `decoder12_upsampler`. ViT path unchanged:
+  v2-run3's checkpoint loads strict, same key order.
+- `config.py`: epoch 50 -> **30**, warmup 5 -> 3, `cfg.unetr.encoder="mamba"`,
+  `cfg.mamba`, `cfg.xai.components` = all five (to match v2-run3's xai/).
+- `utils/engine.py`: build_model refuses a Mamba run without kernels; A_log/D
+  in a weight_decay=0 AdamW group (ViT keeps one group); `apply_run_model_config`
+  so evaluate.py/xai.py rebuild the encoder a run was trained with.
+- `utils/checkpoint.py`: last.pth records the encoder; resuming across encoders
+  refuses. `train.py --encoder`.
+- XAI: `rollout` = hidden-attention rollout of the deepest stage (same 8x8x6
+  grid as the ViT patches) for Mamba; training overlay likewise;
+  randomisation cascade ends at `mamba_encoder`; `_reinitialize` resets
+  children before parents (neutral for the ViT: no composite resets there).
+- Tools: `smoke_test.py` (real data, every stage, time projection),
+  `crosscheck_segmamba.py`, `compare_runs.py`, `setup_mamba_env.sh`.
+
+**Verification.**
+- `pytest`: 243 passed in `mamba`, 239 passed + 4 skipped (kernel-only) in
+  pytorch2. The tests caught a real bug: an `nn.ModuleDict` key "forward"
+  collides with Module.forward, so the branches are named fwd/bwd/slice.
+- `crosscheck_segmamba.py` vs official SegMamba @cff3597: strict weight load,
+  15,718,080 params both. Each of the 8 MambaLayers matches to ~5e-8 given
+  identical input, and the four stages end to end to <=3.7e-6 (TF32 off; with
+  TF32 on the gap is ~1e-3, i.e. conv rounding, not structure).
+- `smoke_test.py` on real data: all stages and all 5 XAI components run.
+  4.3 s/step, 10.4 s/val volume, peak 22.6 GB. ~56 min/epoch -> ~28 h + ~1 h.
+  Model 102.14M params (encoder 15.72M) vs ViT 156.27M (encoder 79.05M).
+
+**Caveats for the paper.** 30 vs 50 epochs, each with its own cosine schedule:
+compare curves and the epoch-30 row (`compare_runs.py`), not only final test.
+torch 2.11 (ViT) vs 2.6 (Mamba). Hidden-attention rollout covers the deepest
+stage (2 layers); the ViT rollout covers 12 blocks. n=70 test split.
+
+**Launch.** The user ran `python train.py --name v3-mamba-30ep` in the `mamba`
+env at 2026-09-12 01:05 IST, in the foreground of terminal pts/4 without nohup,
+so closing that terminal or SSH session kills it. At launch the log showed
+"Encoder: mamba | Trainable parameters: 102.14M (encoder 15.72M)", the snapshot
+showed epoch 30 / warmup 3 / the SegMamba config, and the GPU used ~26 GB.
+
+**Open items left from this session.**
+- Standalone `xai.py` does NOT load a run's tuned thresholds. It uses
+  `cfg.infer.thresholds` = (0.5, 0.5, 0.5) from config.py. The XAI inside
+  `train.py` does use the tuned ones (`tune_and_save` mutates cfg before the
+  test and XAI steps). So a standalone XAI rerun can disagree with the
+  in-train XAI on modality Dice, the uncertainty mask and the deletion curves.
+  The fix (read `eval/infer_config.json` in xai.py) was offered but not made.
+- The ET threshold-knee ablation was never run on v2-run3, and has not been
+  run on the Mamba run either (the sweep argmax ships for both).
+- Nothing from Session 6 is committed. The branch `native-1mm-run` also still
+  has uncommitted Session 5 work.
+
+---
+
+## Session-6 handoff (DONE in Session 7): read the Mamba run (`logs/v3-mamba-30ep`)
+
+Launched 2026-09-12 01:05 IST. Projection from the smoke test: ~56 min/epoch,
+so 30 epochs is ~28 h, plus ~1 h for tuning, the test pass and XAI. It should
+finish around 2026-09-13 06:00 IST. This is a projection; check `run_eta`
+in the log.
+
+### 0. Where things stand
+```bash
+cd "/DATA/Abul Hasan/Glioma Revision"
+conda activate mamba                          # REQUIRED: pytorch2 has no Mamba kernels; build_model refuses
+ps aux | grep "train.py --name v3-mamba-30ep" | grep -v grep   # still running?
+tail -30 logs/v3-mamba-30ep/log.txt           # per-epoch table + run_eta
+wc -l logs/v3-mamba-30ep/metrics.csv          # epochs done = lines - 1
+grep -n "XAI\] complete\|Run finished" logs/v3-mamba-30ep/log.txt   # finished?
+```
+- Both lines present: the run is done, go to step 2.
+- Not running and not finished: it died, go to step 1.
+- Still running: check health against step 3's first rows and wait.
+
+### 1. If it died: resume (it continues from the last completed epoch)
+```bash
+conda activate mamba
+nohup python -u train.py --name v3-mamba-30ep --auto-resume > logs/v3-mamba-30ep.out 2>&1 &
+tail -f logs/v3-mamba-30ep.out
+```
+Use `--auto-resume`, not `--resume`. If no epoch finished (no
+`checkpoints/last.pth`), `--resume` exits with an error, and a plain relaunch
+without a flag creates a new folder `logs/v3-mamba-30ep_1`. `--auto-resume`
+resumes from last.pth if it exists, and otherwise starts fresh in the same folder.
+Resuming into the other encoder is refused (last.pth records the encoder).
+Memory history: v2-run2 died at epoch 33 from GPU memory (`RUN.md` 2b). The
+Mamba run peaked at 22.6 GB in the smoke test.
+
+### 2. When it finishes: what exists, then read in this order
+`train.py` runs everything in one go: 30 epochs, then threshold tuning on val,
+then the test pass (TTA + tuned thresholds + post-processing), then all 5 XAI
+components. The order matters: XAI runs after tuning, so it uses the tuned
+thresholds. **No separate evaluate.py or xai.py step is needed.**
+1. Compare with the ViT run:
+   ```bash
+   python tools/compare_runs.py v2-run3 v3-mamba-30ep
+   ```
+   It writes `logs/compare_v2-run3_vs_v3-mamba-30ep/`:
+   - `curves.png`: per-epoch validation curves on shared axes
+   - `summary.md`: cost, validation at epoch 30 and at each run's best, test
+     metrics with the HD95 breakdown, XAI
+   - `summary.csv`: the same table
+2. `testing/test_metrics.csv`: Dice/HD95/sensitivity plus the `n_halluc_*`,
+   `n_miss_*` and `hd95_*_clean` columns.
+3. `eval/threshold_sweep.json`: the tuned thresholds. They are the sweep
+   argmax, which ignores hallucinations (Session 5 lesson). If ET HD95 is
+   sentinel-dominated, run the ET knee ablation. The template is
+   `logs/run1-new-version/eval/et_operating_point_ablation.py` (`min_total`=352
+   at 1mm). Rerun with `python evaluate.py --run v3-mamba-30ep --tune-thresholds --tag final`.
+4. `xai/`:
+   - modality: gate G6, ET collapses without T1ce and WT without FLAIR
+   - uncertainty: gate G7
+   - faithful: deletion AUCs and the randomisation check
+   - rollout and cam: figures
+   Standalone reruns use 0.5 thresholds (see Session 6 open items), so prefer
+   the in-train outputs.
+
+### 3. What to expect / how to read it
+| Look at | Expected / if | Then |
+|---|---|---|
+| Log header | "Encoder: mamba", 102.14M (encoder 15.72M) | if it says vit/156.27M, the wrong config ran; stop |
+| min/epoch | ~56 (ViT: 41.8) | expected; the Mamba run is slower per epoch here. Report it, don't hide it |
+| **val mean Dice at ep 30** vs v2-run3's **0.841 at ep 30** | at or above | the main result: Mamba matches or beats ViT at equal epochs with 35% fewer params (102M vs 156M) |
+| same | clearly below | the ViT wins at 30 epochs; the curves show whether Mamba was still climbing |
+| final test mean Dice vs **0.868** (ViT, 50 ep) | within ~0.03 | inconclusive: n=70 noise and 30 vs 50 epochs. Rely on the curves and the ep-30 row |
+| test ET sensitivity vs **0.760** | up | better ET recall, the problem the last runs were chasing |
+| `n_halluc_et` vs **6** | higher | ET HD95 will be sentinel-dominated again; compare `hd95_et_clean` (ViT **3.51**) and consider the ET knee |
+| xai/modality ET drop without T1ce vs **-0.645**; WT without FLAIR vs **-0.761** | similar collapse | same modality reliance, G6 passes. If ET does NOT collapse, investigate |
+| faithful randomisation check | maps change once weights are randomised | if they don't change, the explanations don't depend on the model; flag it in the paper |
+| rollout | — | the Mamba rollout covers the deepest stage (2 layers), the ViT rollout 12 blocks. Not like-for-like; say so |
+
+### 4. MAMBA RESULTS (filled in Session 7)
+```
+v3-mamba-30ep | 30 ep | best ep 23 | 44.8 min/epoch | 22.4 h training (23.4 h incl. tune/test/XAI)
+Val  Dice  TC/WT/ET/mean : 0.881 / 0.911 / 0.810 / 0.868   (ep 23; 0.864 at ep 30; ViT at ep 30: 0.841 mean)
+Test Dice  TC/WT/ET/mean : 0.867 / 0.915 / 0.819 / 0.867   (ViT: 0.878 / 0.911 / 0.816 / 0.868)
+Test HD95  TC/WT/ET      : 10.12 / 5.82 / 35.16   (clean ET: 3.62 ; n_halluc/n_miss ET: 4/2 ; TC: 0/1)
+Test Sens  TC/WT/ET      : 0.864 / 0.929 / 0.764   (ViT ET: 0.760)
+Tuned thresholds (sweep) : 0.15 / 0.10 / 0.05   | val-selected ET knee: 0.05 (= shipped; val mismatch flat)
+XAI (in-train, n=70, both-empty scored 1.0): ET drop w/o T1ce = -0.661 ; WT drop w/o FLAIR = -0.339 ;
+     randomisation check: SSIM flat 0.959-0.963 (void, same artefact as the ViT's 0.966)
+Verdict: ties the 50-epoch ViT on test (paired mean Dice -0.0015 [-0.0108, +0.0052], n=70)
+     and is above it on val at every epoch, with 35% fewer params and 36% less training time.
+     The TC gap is 1 patient and the ET HD95 gap 2 patients. The largest difference is
+     modality reliance: the ViT needs FLAIR for every region, Mamba does not. See Session 7.
+```
+
+---
+
+## Session-5 handoff (HISTORICAL — native-1mm run, done as `logs/v2-run3`)
+
+The native-1mm training run was **built, tested, and ready** but was **PENDING
+LAUNCH** at the end of Session 5. It later ran as `logs/v2-run3`, and its results
+are in section 4 below. The steps here are kept for the record.
 
 ### 0. First, find out where things stand
 ```bash
@@ -84,15 +455,19 @@ tail -f logs/run2-native-1mm.out   # watch the per-epoch table + run_eta
 
 ### 4. RESULTS — APPEND HERE (fill in after the run)
 ```
-run2-native-1mm | 50 ep | <best ep> | <min/epoch> | <total h>
-Val  Dice  TC/WT/ET/mean : _ / _ / _ / _
-Test Dice  TC/WT/ET/mean : _ / _ / _ / _
-Test HD95  TC/WT/ET      : _ / _ / _   (clean ET: _ ; n_halluc/n_miss ET: _/_)
-Test Sens  TC/WT/ET      : _ / _ / _   (compare ET to run1's 0.72)
-Tuned thresholds (sweep) : _ / _ / _   | shipped ET knee: _
-XAI: ET drop w/o T1ce = _ ; WT drop w/o FLAIR = _ ; uncertainty retention: _
-Verdict vs run1 (recall recovered? boundaries? hallucinations?): _
+v2-run3 (= the native-1mm run) | 50 ep | best ep 41 | 41.8 min/epoch | 35.1 h total
+Val  Dice  TC/WT/ET/mean : 0.861 / 0.900 / 0.790 / 0.850   (ep 41; 0.841 at ep 30)
+Test Dice  TC/WT/ET/mean : 0.878 / 0.911 / 0.816 / 0.868
+Test HD95  TC/WT/ET      : 3.94 / 4.84 / 45.76   (clean ET: 3.51 ; n_halluc/n_miss ET: 6/2)
+Test Sens  TC/WT/ET      : 0.879 / 0.923 / 0.760   (run1: 0.72)
+Tuned thresholds (sweep) : 0.15 / 0.05 / 0.05   | shipped ET knee: NOT RUN (the sweep argmax shipped)
+XAI: ET drop w/o T1ce = -0.645 ; WT drop w/o FLAIR = -0.761 ; uncertainty, Dice after
+     referring 2% most-uncertain voxels (3 samples): TC 0.883->0.959, WT 0.857->0.913, ET 0.506->0.591
+Verdict: recall UP (ET sens 0.760 vs 0.72); boundaries fine (clean ET HD95 3.51mm);
+     hallucinations UP (6 vs 3-5): ET HD95 = (8 x 374 + 60 x 3.51) / 70 = 45.7mm, all
+     sentinel. The ET knee ablation (section 2 step 2) was never run on this checkpoint.
 ```
+(Filled in Session 6 from `logs/v2-run3/`; the run's xai/ also holds cam/rollout/faithful.)
 
 ### Decisions locked this session (context for whoever reads this)
 - **One more training run only** — it is this native-1mm run. `v1-run3`'s
